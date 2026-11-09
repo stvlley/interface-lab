@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Change Explainer Scrubber</title>
+<link rel="stylesheet" href="../lab.css">
+<style>
+:root{--r2:#a3570e;--water:#cfe0ee;--water-line:#a9c4dc;--street:color-mix(in oklab,var(--ink) 7%,transparent)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--r2:#f0a35e;--water:#1b2a38;--water-line:#2c4560}}
+:root[data-theme="dark"]{--r2:#f0a35e;--water:#1b2a38;--water-line:#2c4560}
+::selection{background:color-mix(in oklab,var(--accent) 30%,transparent)}
+.stage{padding:16px}
+.app{width:min(100%,1000px);display:grid;gap:14px}
+.head h1{margin:0;font-size:20px;line-height:1.2;letter-spacing:-.015em;font-weight:680;text-wrap:balance}
+.head p{margin:3px 0 0;font-size:14px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px;align-items:start}
+.card{background:var(--raised);border-radius:var(--r-lg);box-shadow:var(--shadow),0 0 0 1px var(--line)}
+.mapcard{padding:10px 10px 14px}
+.map{display:block;width:100%;height:auto;max-height:calc(100dvh - 210px);border-radius:var(--r-md);background:var(--surface)}
+.stop-name{font-size:15px;fill:var(--ink);font-weight:550;paint-order:stroke;stroke:var(--surface);stroke-width:4px;stroke-linejoin:round}
+.stop-time{font-size:13px;font-weight:650;paint-order:stroke;stroke:var(--surface);stroke-width:4px;font-variant-numeric:tabular-nums}
+.stop-no{font-size:12px;font-weight:700;text-anchor:middle;dominant-baseline:central}
+.halo{fill:none;stroke:var(--accent);stroke-width:2;opacity:0}
+
+.scrub{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center;padding:12px 6px 0}
+.play{width:40px;height:40px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;cursor:pointer}
+.play:hover{filter:brightness(1.08)}
+.track{position:relative;padding-bottom:22px}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:28px;margin:0;background:none;cursor:grab;touch-action:none}
+input[type=range]:active{cursor:grabbing}
+input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:linear-gradient(var(--accent),var(--accent)) 0/var(--fill,0%) 100% no-repeat,var(--line)}
+input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:var(--line)}
+input[type=range]::-moz-range-progress{height:6px;border-radius:3px;background:var(--accent)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;margin-top:-8px;border-radius:50%;background:var(--raised);border:2px solid var(--accent);box-shadow:0 1px 4px rgba(0,0,0,.25)}
+input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--raised);border:2px solid var(--accent)}
+input[type=range]:focus-visible{outline:none}
+input[type=range]:focus-visible::-webkit-slider-thumb{outline:2px solid var(--accent);outline-offset:3px}
+input[type=range]:focus-visible::-moz-range-thumb{outline:2px solid var(--accent);outline-offset:3px}
+.ticks{position:absolute;left:11px;right:11px;bottom:0;height:22px}
+.tick{position:absolute;transform:translateX(-50%);border:0;background:none;padding:2px 6px;font-size:12px;color:var(--muted);cursor:pointer;border-radius:6px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tick[aria-current="true"]{color:var(--ink);font-weight:650}
+.tick:hover{color:var(--ink)}
+
+.panel{padding:16px;display:grid;gap:14px}
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0}
+.metric{display:grid;gap:2px;align-content:start}
+.metric dt{font-size:13px;color:var(--muted);line-height:1.3}
+.metric dd{margin:0;font-size:18px;font-weight:650;letter-spacing:-.01em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.metric .delta{font-size:12px;line-height:1.3;color:var(--muted);font-variant-numeric:tabular-nums;min-height:16px}
+.metric .delta.good{color:var(--ok)}
+.metric dd.late{color:var(--crit)}
+hr{border:0;border-top:1px solid var(--line);margin:0}
+.steps[hidden]{display:none}
+.steps{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.step{display:grid;grid-template-columns:24px 1fr;gap:10px;align-items:start;width:100%;text-align:left;border:0;background:none;padding:7px 8px;border-radius:var(--r-sm);cursor:pointer;font-size:14px;line-height:1.35;color:var(--muted);transition:background .2s var(--ease),color .2s var(--ease)}
+.step:hover{background:color-mix(in oklab,var(--ink) 5%,transparent)}
+.step .n{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;box-shadow:inset 0 0 0 1.5px var(--line);transition:background .2s var(--ease),color .2s var(--ease)}
+.step strong{display:block;color:inherit;font-weight:650}
+.step[data-s="done"]{color:var(--ink)}
+.step[data-s="done"] .n{background:var(--ok);color:var(--bg);box-shadow:none}
+.step[data-s="now"]{color:var(--ink);background:color-mix(in oklab,var(--accent) 10%,transparent)}
+.step[data-s="now"] .n{background:var(--accent);color:var(--accent-ink);box-shadow:none}
+.quiz-chip{justify-self:start;display:inline-flex;align-items:center;gap:8px;transition:opacity .25s var(--ease),transform .25s var(--ease)}
+.quiz-chip[hidden]{display:none}
+.quiz-chip.enter{animation:rise .3s var(--ease)}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}}
+.quiz{display:grid;gap:10px;animation:rise .3s var(--ease)}
+.quiz[hidden]{display:none}
+#qtitle:focus{outline:none}
+.quiz h2{margin:0;font-size:16px;line-height:1.3;font-weight:650;text-wrap:balance}
+.opts{display:grid;gap:6px}
+.opt{display:flex;gap:10px;align-items:center;text-align:left;border:0;padding:9px 10px;border-radius:var(--r-sm);background:none;box-shadow:inset 0 0 0 1px var(--line);font-size:14px;line-height:1.3;cursor:pointer;transition:box-shadow .2s var(--ease),background .2s var(--ease)}
+.opt:hover{box-shadow:inset 0 0 0 1px var(--muted)}
+.opt .mark{flex:none;width:18px;height:18px;border-radius:50%;box-shadow:inset 0 0 0 1.5px var(--muted);display:grid;place-items:center}
+.opt[data-r="right"]{box-shadow:inset 0 0 0 2px var(--ok);background:color-mix(in oklab,var(--ok) 9%,transparent)}
+.opt[data-r="right"] .mark{background:var(--ok);box-shadow:none;color:var(--bg)}
+.opt[data-r="wrong"]{box-shadow:inset 0 0 0 2px var(--crit);background:color-mix(in oklab,var(--crit) 7%,transparent)}
+.opt[data-r="wrong"] .mark{background:var(--crit);box-shadow:none;color:var(--bg)}
+.verdict{margin:0;font-size:14px;line-height:1.4;min-height:20px}
+.verdict.ok{color:var(--ok)}.verdict.no{color:var(--crit)}
+.linkish{justify-self:start;border:0;background:none;padding:4px 0;color:var(--accent);font-size:14px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+
+@media (max-width:720px){
+ .grid{grid-template-columns:1fr}
+ .stop-name{font-size:21px}.stop-time{font-size:18px}.stop-no{font-size:15px}
+ .head h1{font-size:18px}
+}
+.ap-cursor{position:fixed;left:0;top:0;z-index:50;pointer-events:none;transition:transform .5s var(--ease)}
+.ap-cursor svg{display:block;filter:drop-shadow(0 2px 3px rgba(0,0,0,.3))}
+.ap-ripple{position:fixed;z-index:49;width:36px;height:36px;margin:-18px 0 0 -18px;border-radius:50%;border:2px solid var(--accent);pointer-events:none;animation:rip .45s var(--ease) forwards}
+@keyframes rip{from{transform:scale(.3);opacity:1}to{transform:scale(1.3);opacity:0}}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+</style>
+</head>
+<body>
+<main class="stage">
+ <div class="app">
+  <div class="head">
+   <h1>Route 1, Tuesday morning: what the routing agent changed</h1>
+   <p>Three edits. Drag the scrubber to replay them.</p>
+  </div>
+  <div class="grid">
+   <section class="card mapcard" aria-label="Route map">
+    <svg class="map" id="map" viewBox="0 0 640 400" role="img" aria-labelledby="mapdesc">
+     <desc id="mapdesc">Map of Route 1 from the depot. The faint dashed line is the route before the change; the solid line is the route at the selected step.</desc>
+     <g id="streets" stroke="var(--street)" stroke-width="1.5"></g>
+     <path d="M478 -10C492 90 470 170 486 250S492 350 482 410" fill="none" stroke="var(--water)" stroke-width="30"/>
+     <path d="M478 -10C492 90 470 170 486 250S492 350 482 410" fill="none" stroke="var(--water-line)" stroke-width="1" stroke-dasharray="3 6"/>
+     <g fill="var(--surface)" stroke="var(--muted)" stroke-width="1.5"><rect x="458" y="63" width="54" height="14" rx="3"/><rect x="458" y="323" width="54" height="14" rx="3"/></g>
+     <text x="528" y="392" class="stop-time" fill="var(--muted)" style="font-weight:500">River Lune</text>
+     <path id="ghost" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="2 6" stroke-linecap="round" opacity=".55"/>
+     <path id="r2" fill="none" stroke="var(--r2)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="10 7"/>
+     <path id="r1" fill="none" stroke="var(--accent)" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+     <text x="636" y="186" class="stop-time" fill="var(--r2)" text-anchor="end">Route 2</text>
+     <g id="stops"></g>
+    </svg>
+    <div class="scrub">
+     <button class="play" id="play" type="button" aria-label="Play the change"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path id="playicon" d="M4 2.5v11l9.5-5.5z" fill="currentColor"/></svg></button>
+     <div class="track">
+      <input id="range" type="range" min="0" max="3" step="0.001" value="0" aria-label="Change timeline">
+      <div class="ticks" id="ticks"></div>
+     </div>
+    </div>
+   </section>
+   <aside class="card panel" aria-label="What changed">
+    <dl class="metrics" id="metrics"></dl>
+    <hr>
+    <ol class="steps" id="steps"></ol>
+    <button class="pill primary quiz-chip" id="quizchip" type="button" hidden><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6.2 6.3a1.9 1.9 0 1 1 2.6 1.8c-.5.2-.8.6-.8 1.1v.4M8 11.6v.1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>Quiz me on this change</button>
+    <div class="quiz" id="quiz" hidden>
+     <h2 id="qtitle" tabindex="-1">Why doesn't Route 1 cross the river any more?</h2>
+     <div class="opts" id="opts" role="group" aria-labelledby="qtitle"></div>
+     <p class="verdict" id="verdict" aria-live="polite"></p>
+     <button class="linkish" id="back" type="button">Back to the steps</button>
+    </div>
+   </aside>
+  </div>
+  <p class="sr" id="live" aria-live="polite"></p>
+ </div>
+</main>
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s), NS = 'http://www.w3.org/2000/svg';
+const rm = matchMedia('(prefers-reduced-motion: reduce)');
+const P = {
+ depot:{x:70, y:340, name:'Depot', lx:-14, ly:30, anchor:'start'},
+ A:{x:140, y:110, name:'Bakery', lx:-18, ly:-20},
+ C:{x:290, y:80, name:'Café', lx:18, ly:-12},
+ D:{x:370, y:180, name:'Florist', lx:18, ly:6},
+ B:{x:330, y:300, name:'Pharmacy', lx:-18, ly:-18, anchor:'end'},
+ F:{x:430, y:350, name:'Hardware', lx:-4, ly:36, anchor:'end'},
+ E:{x:560, y:150, name:'School kitchen', lx:0, ly:-22, anchor:'middle'},
+ N:{x:485, y:70}, S:{x:485, y:330}
+};
+const ROUTES = [
+ ['depot','B','D','A','C','N','E','S','F','depot'],
+ ['depot','A','B','D','C','N','E','S','F','depot'],
+ ['depot','A','C','D','N','E','S','F','B','depot'],
+ ['depot','A','C','D','F','B','depot']
+];
+const STEPS = [
+ {title:'Bakery first', why:'It only takes deliveries until 7:00, and it was third in line.', changed:['A']},
+ {title:'Pharmacy on the way home', why:'It sits on the return leg, so the van no longer doubles back.', changed:['B']},
+ {title:'School kitchen to Route 2', why:'Route 2 is already east of the river, so Route 1 skips both bridges.', changed:['E']}
+];
+const R2_BASE = [[648, 200], [604, 246]];
+const M_PER_UNIT = 12, KMH = 18, SERVICE = 6, DEPART = 6 * 60 + 30, BAKERY_BY = 7 * 60;
+
+/* ---------- geometry ---------- */
+const pts = r => r.map(id => [P[id].x, P[id].y]);
+const len = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
+function resample(poly, n){
+ const seg = [], total = poly.slice(1).reduce((s, p, i) => { const l = len(poly[i], p); seg.push(l); return s + l; }, 0);
+ const out = []; let i = 0, acc = 0;
+ for (let k = 0; k < n; k++) {
+  const d = total * k / (n - 1);
+  while (i < seg.length - 1 && acc + seg[i] < d) acc += seg[i++];
+  const t = seg[i] ? (d - acc) / seg[i] : 0;
+  out.push([poly[i][0] + (poly[i + 1][0] - poly[i][0]) * t, poly[i][1] + (poly[i + 1][1] - poly[i][1]) * t]);
+ }
+ return out;
+}
+const SAMPLED = ROUTES.map(r => resample(pts(r), 400));
+const dPath = a => 'M' + a.map(p => p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join('L');
+function metrics(r){
+ let min = DEPART, units = 0, bakery = null;
+ for (let i = 1; i < r.length; i++) {
+  const u = len([P[r[i - 1]].x, P[r[i - 1]].y], [P[r[i]].x, P[r[i]].y]); units += u;
+  min += u * M_PER_UNIT / 1000 / KMH * 60;
+  if (r[i] === 'A') bakery = min;
+  if (P[r[i]].name && r[i] !== 'depot') min += SERVICE;
+ }
+ return {km:units * M_PER_UNIT / 1000, back:min, bakery};
+}
+const MET = ROUTES.map(metrics);
+const clock = m => { m = Math.round(m); return Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0'); };
+
+/* ---------- static drawing ---------- */
+function el(tag, attrs, parent){ const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); parent && parent.append(n); return n; }
+const streets = $('#streets');
+for (let x = 40; x < 640; x += 60) el('path', {d:`M${x} 0V400`}, streets);
+for (let y = 30; y < 400; y += 60) el('path', {d:`M0 ${y}H640`}, streets);
+$('#ghost').setAttribute('d', dPath(pts(ROUTES[0])));
+const stopEls = {};
+const stopsG = $('#stops');
+for (const id of ['depot', 'A', 'B', 'C', 'D', 'E', 'F']) {
+ const s = P[id], g = el('g', {transform:`translate(${s.x} ${s.y})`}, stopsG);
+ const halo = el('circle', {class:'halo', r:20}, g);
+ const dot = id === 'depot' ? el('rect', {x:-12, y:-12, width:24, height:24, rx:5, fill:'var(--ink)'}, g) : el('circle', {r:12, fill:'var(--raised)', stroke:'var(--accent)', 'stroke-width':3}, g);
+ const no = el('text', {class:'stop-no', fill: id === 'depot' ? 'var(--bg)' : 'var(--ink)'}, g);
+ if (id === 'depot') no.textContent = 'D';
+ const name = el('text', {class:'stop-name', x:s.lx + (s.anchor === 'middle' ? 0 : 0), y:s.ly + 5, 'text-anchor':s.anchor || 'start'}, g); name.textContent = s.name;
+ if (s.anchor === 'start' && id === 'depot') name.setAttribute('x', -12);
+ const time = id === 'A' ? el('text', {class:'stop-time', x:-18, y:36, 'text-anchor':'start'}, g) : null;
+ stopEls[id] = {g, halo, dot, no, time};
+}
+if (P.A.lx < 0) { stopEls.A.g.querySelector('.stop-name').setAttribute('text-anchor', 'start'); stopEls.A.g.querySelector('.stop-name').setAttribute('x', -20); stopEls.A.g.querySelector('.stop-name').setAttribute('y', -20); }
+
+const metricsEl = $('#metrics');
+metricsEl.innerHTML = [['km', 'Distance'], ['back', 'Back at depot'], ['bakery', 'Bakery drop']].map(([k, l]) => `<div class="metric"><dt>${l}</dt><dd id="m-${k}"></dd><span class="delta" id="d-${k}"></span></div>`).join('');
+const stepsEl = $('#steps');
+stepsEl.innerHTML = STEPS.map((s, i) => `<li><button class="step" type="button" data-i="${i + 1}"><span class="n">${i + 1}</span><span><strong>${s.title}</strong>${s.why}</span></button></li>`).join('');
+const ticks = $('#ticks');
+ticks.innerHTML = ['Before', '1', '2', 'After'].map((l, i) => `<button class="tick" type="button" data-i="${i}" style="left:${i / 3 * 100}%" aria-label="${i === 0 ? 'Before the change' : i === 3 ? 'After step 3, the final route' : 'Step ' + i}">${l}</button>`).join('');
+
+/* ---------- render at a position t in [0,3] ---------- */
+const range = $('#range');
+let t = 0, lastWhole = -1;
+function render(v){
+ t = Math.max(0, Math.min(3, v));
+ range.value = t; range.style.setProperty('--fill', t / 3 * 100 + '%');
+ const k = Math.min(2, Math.floor(t)), p = t - k, a = SAMPLED[k], b = SAMPLED[k + 1];
+ $('#r1').setAttribute('d', dPath(a.map((q, i) => [q[0] + (b[i][0] - q[0]) * p, q[1] + (b[i][1] - q[1]) * p])));
+ const e = Math.max(0, Math.min(1, t - 2)), end = [R2_BASE[1][0] + (P.E.x - R2_BASE[1][0]) * e, R2_BASE[1][1] + (P.E.y + 12 - R2_BASE[1][1]) * e];
+ $('#r2').setAttribute('d', dPath([...R2_BASE, end]));
+
+ const whole = Math.round(t), route = ROUTES[whole];
+ let n = 0;
+ for (const id of ['A', 'B', 'C', 'D', 'E', 'F']) {
+  const s = stopEls[id], idx = route.indexOf(id);
+  const order = route.filter(r => P[r].name && r !== 'depot');
+  s.no.textContent = idx < 0 ? '' : order.indexOf(id) + 1;
+  s.dot.setAttribute('stroke', idx < 0 ? 'var(--r2)' : 'var(--accent)');
+  s.dot.setAttribute('fill', idx < 0 ? 'var(--r2)' : 'var(--raised)');
+  s.no.setAttribute('aria-hidden', 'true');
+ }
+ // halo on the stop the nearest step changed, strongest at that step
+ const near = t === 0 ? -1 : Math.ceil(t - 1e-6) - 1, strength = t === 0 ? 0 : 1 - Math.min(1, Math.abs(t - (near + 1)) * 1.6);
+ for (const id in stopEls) stopEls[id].halo.style.opacity = near >= 0 && STEPS[near].changed.includes(id) ? Math.max(.15, strength) : 0;
+
+ const lerp = key => MET[k][key] + (MET[k + 1][key] - MET[k][key]) * p;
+ const km = lerp('km'), back = lerp('back'), bak = lerp('bakery'), late = bak > BAKERY_BY;
+ $('#m-km').textContent = km.toFixed(1) + ' km';
+ $('#m-back').textContent = clock(back);
+ $('#m-bakery').textContent = clock(bak) + (late ? ' late' : '');
+ $('#m-bakery').classList.toggle('late', late);
+ const dk = km - MET[0].km, db = back - MET[0].back;
+ setDelta('km', t === 0 ? '' : (dk <= 0 ? '−' : '+') + Math.abs(dk).toFixed(1) + ' km vs before', dk < 0);
+ setDelta('back', t === 0 ? '' : Math.abs(Math.round(db)) + ' min ' + (db < 0 ? 'earlier' : 'later'), db < 0);
+ setDelta('bakery', late ? 'window closes 7:00' : 'inside the 7:00 window', !late);
+ const at = stopEls.A.time; at.textContent = clock(bak) + (late ? ' late' : ''); at.setAttribute('fill', late ? 'var(--crit)' : 'var(--ok)');
+
+ const cur = t === 0 ? 0 : Math.ceil(t - 1e-6);
+ stepsEl.querySelectorAll('.step').forEach((s, i) => s.dataset.s = i + 1 < cur || (i + 1 === cur && Math.abs(t - cur) < 1e-6 && cur === 3) ? 'done' : i + 1 === cur ? 'now' : 'todo');
+ ticks.querySelectorAll('.tick').forEach((tk, i) => tk.setAttribute('aria-current', String(Math.round(t) === i)));
+ range.setAttribute('aria-valuetext', whole === 0 ? 'Before the change' : `Step ${whole} of 3: ${STEPS[whole - 1].title}`);
+ if (whole !== lastWhole && Math.abs(t - whole) < .02) { lastWhole = whole; $('#live').textContent = whole === 0 ? 'Before the change.' : `Step ${whole}: ${STEPS[whole - 1].title}. ${STEPS[whole - 1].why}`; }
+ const chip = $('#quizchip');
+ const show = t > 2.98 && $('#quiz').hidden;
+ if (show && chip.hidden) { chip.hidden = false; chip.classList.remove('enter'); void chip.offsetWidth; chip.classList.add('enter'); }
+ if (!show) chip.hidden = true;
+}
+function setDelta(k, txt, good){ const d = $('#d-' + k); d.textContent = txt; d.classList.toggle('good', !!good && !!txt); }
+
+/* ---------- tweening and input ---------- */
+let anim = 0;
+function tweenTo(v, ms){
+ cancelAnimationFrame(anim);
+ if (rm.matches || !ms) { render(v); return Promise.resolve(); }
+ const from = t, start = performance.now();
+ return new Promise(res => { const f = now => { const k = Math.min(1, (now - start) / ms), e = 1 - Math.pow(1 - k, 3); render(from + (v - from) * e); if (k < 1) anim = requestAnimationFrame(f); else res(); }; anim = requestAnimationFrame(f); });
+}
+range.addEventListener('input', () => { stopPlay(); cancelAnimationFrame(anim); render(+range.value); });
+range.addEventListener('change', () => tweenTo(Math.round(t), 220));
+range.addEventListener('keydown', e => {
+ const map = {ArrowRight:1, ArrowUp:1, ArrowLeft:-1, ArrowDown:-1, PageUp:1, PageDown:-1};
+ if (e.key in map) { e.preventDefault(); stopPlay(); const target = map[e.key] > 0 ? Math.floor(t + 1e-6) + 1 : Math.ceil(t - 1e-6) - 1; tweenTo(Math.max(0, Math.min(3, target)), 380); }
+ if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); stopPlay(); tweenTo(e.key === 'Home' ? 0 : 3, 500); }
+});
+ticks.addEventListener('click', e => { const b = e.target.closest('.tick'); if (b) { stopPlay(); tweenTo(+b.dataset.i, 420); } });
+stepsEl.addEventListener('click', e => { const b = e.target.closest('.step'); if (b) { stopPlay(); tweenTo(+b.dataset.i, 420); } });
+
+let playing = false;
+const playBtn = $('#play'), icon = $('#playicon');
+function setPlaying(v){ playing = v; icon.setAttribute('d', v ? 'M4 2.5h3v11H4zM9 2.5h3v11H9z' : 'M4 2.5v11l9.5-5.5z'); playBtn.setAttribute('aria-label', v ? 'Pause' : 'Play the change'); }
+function stopPlay(){ if (playing) { setPlaying(false); cancelAnimationFrame(anim); } }
+playBtn.addEventListener('click', async () => {
+ if (playing) { stopPlay(); render(Math.round(t)); return; }
+ setPlaying(true);
+ if (t > 2.99) await tweenTo(0, 300);
+ while (playing && t < 2.99) {
+  await tweenTo(Math.floor(t + 1e-6) + 1, 900);
+  if (!playing) return;
+  await new Promise(r => setTimeout(r, 1300));
+ }
+ setPlaying(false);
+});
+
+/* ---------- quiz ---------- */
+const OPTS = [
+ ['The north bridge is closed on Tuesdays', false],
+ ['Route 2 now delivers to the school kitchen', true],
+ ['The bakery has to come first', false]
+];
+const optsEl = $('#opts'), verdict = $('#verdict');
+function buildQuiz(){
+ optsEl.innerHTML = OPTS.map(([txt], i) => `<button class="opt" type="button" data-i="${i}"><span class="mark" aria-hidden="true"></span>${txt}</button>`).join('');
+ verdict.textContent = ''; verdict.className = 'verdict';
+}
+function openQuiz(){ buildQuiz(); $('#quiz').hidden = false; stepsEl.hidden = true; render(t); $('#qtitle').focus({preventScroll:true}); }
+function closeQuiz(){ $('#quiz').hidden = true; stepsEl.hidden = false; render(t); $('#quizchip').hidden || $('#quizchip').focus({preventScroll:true}); }
+$('#quizchip').addEventListener('click', openQuiz);
+$('#back').addEventListener('click', closeQuiz);
+const ICON_OK = '<svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 5.2l2 2L8 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const ICON_NO = '<svg width="10" height="10" viewBox="0 0 10 10"><path d="M3 3l4 4M7 3L3 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+optsEl.addEventListener('click', e => {
+ const b = e.target.closest('.opt'); if (!b) return;
+ const right = OPTS[+b.dataset.i][1];
+ b.dataset.r = right ? 'right' : 'wrong';
+ b.querySelector('.mark').innerHTML = right ? ICON_OK : ICON_NO;
+ if (right) { verdict.className = 'verdict ok'; verdict.textContent = 'Right. Route 2 is already east of the river, so it takes the school kitchen and Route 1 makes no crossings.'; optsEl.querySelectorAll('.opt').forEach(o => o.disabled = o !== b); }
+ else { verdict.className = 'verdict no'; verdict.textContent = 'Not quite. Scrub between step 2 and step 3 and watch which stop changes colour.'; }
+});
+
+render(0);
+
+/* ---------- autoplay ---------- */
+const STOP = Symbol('stop');
+let auto = new URLSearchParams(location.search).has('autoplay'), gen = 0, cur;
+const sleep = ms => new Promise((res, rej) => { const g = gen; setTimeout(() => g === gen && auto ? res() : rej(STOP), ms); });
+function stopAuto(e){ if (!e.isTrusted || !auto) return; auto = false; gen++; cancelAnimationFrame(anim); cur && cur.remove(); }
+['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(ev => addEventListener(ev, stopAuto, {capture:true, passive:true}));
+function put(x, y, ms){ cur.style.transitionDuration = (rm.matches ? 0 : ms) + 'ms'; cur.style.transform = `translate(${x}px,${y}px)`; cur._p = {x, y}; }
+async function moveTo(x, y){ const f = cur._p, d = Math.hypot(x - f.x, y - f.y), ms = rm.matches ? 0 : Math.min(750, 260 + d * .9); put(x, y, ms); await sleep(ms + 80); }
+function ripple(x, y){ const r = document.createElement('div'); r.className = 'ap-ripple'; r.style.left = x + 'px'; r.style.top = y + 'px'; document.body.append(r); setTimeout(() => r.remove(), 500); }
+async function tapEl(n){ const r = n.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2; await moveTo(x, y); ripple(x, y); await sleep(110); n.click(); }
+const thumbX = v => { const r = range.getBoundingClientRect(); return [r.left + 11 + (r.width - 22) * v / 3, r.top + r.height / 2]; };
+async function drag(to, ms){
+ const from = t;
+ if (rm.matches) { render(to); put(...thumbX(to), 0); await sleep(300); return; }
+ const start = performance.now();
+ await new Promise((res, rej) => { const g = gen; const f = now => { if (g !== gen) return rej(STOP); const k = Math.min(1, (now - start) / ms), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2; render(from + (to - from) * e); put(...thumbX(t), 0); if (k < 1) requestAnimationFrame(f); else res(); }; requestAnimationFrame(f); });
+}
+async function demo(){
+ await sleep(600);
+ const [x, y] = thumbX(0); await moveTo(x, y); ripple(x, y); await sleep(200);
+ for (const s of [1, 2, 3]) { await drag(s, 1100); await sleep(s === 3 ? 900 : 1500); }
+ await tapEl($('#quizchip')); await sleep(900);
+ await tapEl(optsEl.children[0]); await sleep(1400);
+ await tapEl(optsEl.children[1]); await sleep(2600);
+}
+async function run(){
+ cur = document.createElement('div'); cur.className = 'ap-cursor'; cur.setAttribute('aria-hidden', 'true');
+ cur.innerHTML = '<svg width="22" height="26" viewBox="0 0 22 26"><path d="M2 2l17 11.5-7.4 1.3L16 23l-3.6 1.6-4.3-8.3L2 21z" fill="var(--ink)" stroke="var(--bg)" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+ document.body.append(cur); put(innerWidth * .6, innerHeight * .92, 0);
+ while (auto) {
+  try { await demo(); await sleep(2000); $('#quiz').hidden = true; stepsEl.hidden = false; render(0); document.activeElement && document.activeElement.blur(); }
+  catch (e) { if (e !== STOP) throw e; }
+ }
+}
+if (auto) run();
+})();
+</script>
+</body>
+</html>

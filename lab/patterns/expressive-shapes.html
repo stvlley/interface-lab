@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Springy Shape Morphs</title>
+<link rel="stylesheet" href="../lab.css">
+<style>
+:root{--tonal:color-mix(in srgb,var(--accent) 16%,var(--raised));--chip:color-mix(in srgb,var(--ink) 7%,var(--surface))}
+html,body{overflow:hidden}
+::selection{background:color-mix(in srgb,var(--accent) 30%,transparent)}
+.stage{height:100%;padding:24px}
+.player{position:relative;width:min(880px,100%);background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--shadow);
+  padding:24px;display:grid;gap:14px 32px;--art:min(100%,44vh,440px)}
+@media (min-width:720px){.player{grid-template-columns:min(44vw,calc(100vh - 96px),420px) minmax(0,1fr);align-items:center}
+  .player .art{grid-row:1/span 6;width:100%}}
+@media (max-width:719px){.stage{padding:0}.player{height:100%;border-radius:0;box-shadow:none;align-content:start;padding:16px;gap:12px}
+  .art{justify-self:center;width:min(100%,40vh)}}
+.art{position:relative;aspect-ratio:1;border-radius:var(--r-lg);overflow:hidden;background:var(--chip)}
+.art svg.cover{display:block;width:100%;height:100%}
+.loader{position:absolute;inset:0;display:grid;place-items:center;background:color-mix(in srgb,var(--bg) 55%,transparent);
+  -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);opacity:0;visibility:hidden;transition:opacity .2s var(--ease),visibility 0s .2s}
+.loader.on{opacity:1;visibility:visible;transition:opacity .2s var(--ease)}
+.loader .well{width:96px;height:96px;border-radius:50%;background:var(--tonal);display:grid;place-items:center}
+.loader svg{width:64px;height:64px;fill:var(--accent)}
+
+.meta h1{margin:0;font-size:clamp(24px,3.4vw,32px);line-height:1.15;letter-spacing:-.02em}
+.meta p{margin:2px 0 0;color:var(--muted);font-size:15px}
+.progress{display:grid;gap:2px}
+.progress svg{width:100%;height:28px;display:block;overflow:visible}
+.progress .times{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.wave{fill:none;stroke:var(--accent);stroke-width:4;stroke-linecap:round}
+.rest{fill:none;stroke:color-mix(in srgb,var(--accent) 22%,var(--surface));stroke-width:4;stroke-linecap:round}
+.knob{fill:var(--accent)}
+
+.transport{display:flex;align-items:center;justify-content:center;gap:20px}
+.icon-btn{width:56px;height:56px;border-radius:50%;border:0;background:var(--chip);display:grid;place-items:center;cursor:pointer;transition:background-color .15s,scale .2s var(--spring)}
+.icon-btn:hover{background:color-mix(in srgb,var(--ink) 12%,var(--surface))}
+.icon-btn:active{scale:.92}
+.ico{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.play{width:92px;height:92px;border:0;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;cursor:pointer;will-change:transform,border-radius}
+.play svg{width:34px;height:34px}
+.play path{fill:currentColor;stroke:currentColor;stroke-width:1.4;stroke-linejoin:round}
+
+.group{display:flex;gap:4px;height:52px}
+.group button{flex:1 1 0;min-width:0;border:0;background:var(--chip);color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center;
+  border-radius:8px;overflow:hidden;white-space:nowrap;font-size:14px;font-weight:600;transition:background-color .2s var(--ease),color .2s,border-radius .3s var(--ease)}
+.group button:first-child{border-radius:26px 8px 8px 26px}.group button:last-child{border-radius:8px 26px 26px 8px}
+.group button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-radius:26px}
+.group button:focus-visible{outline-offset:2px}
+.group .lbl{display:inline-block;max-width:0;opacity:0;overflow:hidden;transition:max-width .35s var(--ease),opacity .2s var(--ease),margin .35s var(--ease)}
+.group [aria-pressed="true"] .lbl{max-width:110px;opacity:1;margin-left:8px}
+.panel{min-height:88px;padding:14px 16px;margin-right:72px;border-radius:var(--r-md);background:var(--chip);font-size:15px;line-height:1.45}
+.panel .k{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px}
+.panel.swap{animation:swap .28s var(--ease)}
+@keyframes swap{from{opacity:0;translate:0 6px}}
+.panel em{font-style:normal;color:var(--muted)}
+
+/* FAB that morphs into a menu panel. Size and corner radius are spring-driven from JS. */
+.fab{position:absolute;right:24px;bottom:24px;width:56px;height:56px;border-radius:16px;background:var(--tonal);color:var(--accent);
+  box-shadow:0 1px 2px rgba(0,0,0,.12),0 6px 18px rgba(0,0,0,.14);overflow:hidden;z-index:4}
+.fab .toggle{position:absolute;right:0;bottom:0;width:56px;height:56px;border:0;background:none;color:inherit;cursor:pointer;display:grid;place-items:center;border-radius:16px}
+.fab .toggle svg{width:24px;height:24px}
+.fab ul{list-style:none;margin:0;padding:8px;position:absolute;left:0;top:0;width:248px}
+.fab li button{width:100%;height:48px;border:0;background:none;border-radius:12px;display:flex;align-items:center;gap:14px;padding:0 14px;
+  color:var(--ink);font-size:15px;font-weight:500;cursor:pointer;text-align:left}
+.fab li button:hover,.fab li button.hot{background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.fab li .ico{color:var(--accent)}
+.snack{position:absolute;left:50%;bottom:24px;translate:-50% 12px;opacity:0;background:var(--ink);color:var(--bg);border-radius:12px;padding:10px 10px 10px 16px;
+  display:flex;gap:12px;align-items:center;font-size:14px;transition:opacity .2s var(--ease),translate .3s var(--ease);pointer-events:none;z-index:5;white-space:nowrap}
+.snack.on{opacity:1;translate:-50% 0;pointer-events:auto}
+.snack button{border:0;background:none;color:color-mix(in srgb,var(--accent) 60%,var(--bg));font-weight:600;cursor:pointer;padding:6px 8px;border-radius:8px}
+@media (min-width:720px){.snack{left:44px;bottom:44px;translate:0 12px}.snack.on{translate:0 0}}
+@media (max-width:719px){.snack{bottom:88px}.fab{right:16px;bottom:16px}}
+
+.touch{position:fixed;left:0;top:0;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;z-index:10;pointer-events:none;
+  background:color-mix(in srgb,var(--ink) 20%,transparent);border:2px solid color-mix(in srgb,var(--surface) 85%,transparent);
+  opacity:0;transition:opacity .18s,scale .15s var(--ease)}
+.touch.on{opacity:1}.touch.down{scale:.8}
+</style>
+</head>
+<body>
+<main class="stage">
+  <section class="player" id="player" aria-label="Now playing">
+    <div class="art" id="art">
+      <svg class="cover" id="cover" viewBox="0 0 400 400" aria-hidden="true"></svg>
+      <div class="loader" id="loader" role="status" aria-label="Loading track"><div class="well"><svg viewBox="-50 -50 100 100"><path id="loaderPath"/></svg></div></div>
+    </div>
+    <div class="meta"><h1 id="tTitle"></h1><p id="tArtist"></p></div>
+    <div class="progress">
+      <svg id="prog" viewBox="0 0 300 28" preserveAspectRatio="none" aria-hidden="true"><path class="rest" id="rest"/><path class="wave" id="wave"/><rect class="knob" id="knob" width="4" height="22" rx="2" y="3"/></svg>
+      <div class="times"><span id="tNow">0:00</span><span id="tLen"></span></div>
+    </div>
+    <div class="transport">
+      <button class="icon-btn" id="prev" aria-label="Previous track"><svg class="ico" viewBox="0 0 24 24"><path d="M18 6l-8 6 8 6zM6 6v12"/></svg></button>
+      <button class="play" id="play" aria-label="Play"><svg viewBox="0 0 24 24"><path id="pa"/><path id="pb"/></svg></button>
+      <button class="icon-btn" id="next" aria-label="Next track"><svg class="ico" viewBox="0 0 24 24"><path d="M6 6l8 6-8 6zM18 6v12"/></svg></button>
+    </div>
+    <div class="group" id="group" role="group" aria-label="Track details"></div>
+    <div class="panel" id="panel" aria-live="polite"></div>
+
+    <div class="fab" id="fab">
+      <ul id="menu" role="menu" aria-label="Track actions" hidden></ul>
+      <button class="toggle" id="fabBtn" aria-label="Track actions" aria-haspopup="menu" aria-expanded="false"><svg class="ico" viewBox="0 0 24 24" id="fabIco"><path d="M12 5v14M5 12h14"/></svg></button>
+    </div>
+    <div class="snack" id="snack" role="status"><span id="snackText"></span><button id="undo">Undo</button></div>
+  </section>
+</main>
+<div class="touch" id="touch" aria-hidden="true"></div>
+
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+
+/* ---------- Spring engine: semi-implicit Euler, fixed 240 Hz substeps, interruptible (retargeting keeps velocity) ---------- */
+const springs = new Set(), hooks = new Set(); let raf = 0, last = 0;
+class Spring {
+  constructor(v, k, c, onUpdate, eps = .001){ Object.assign(this, {v, t:v, vel:0, k, c, onUpdate, eps}); onUpdate(v); }
+  to(t, impulse = 0){ this.t = t; this.vel += impulse;
+    if (reduced.matches){ this.v = t; this.vel = 0; this.onUpdate(t); return; }
+    springs.add(this); kick(); }
+  set(v){ this.v = this.t = v; this.vel = 0; springs.delete(this); this.onUpdate(v); }
+}
+function kick(){ if (!raf){ last = performance.now(); raf = requestAnimationFrame(tick); } }
+function tick(now){
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  for (const s of springs){
+    for (let t = dt; t > 1e-6; t -= 1/240){ const h = Math.min(1/240, t), f = -s.k * (s.v - s.t) - s.c * s.vel; s.vel += f * h; s.v += s.vel * h; }
+    if (Math.abs(s.v - s.t) < s.eps && Math.abs(s.vel) < s.eps * 20){ s.v = s.t; s.vel = 0; springs.delete(s); }
+    s.onUpdate(s.v);
+  }
+  hooks.forEach(f => f(dt));
+  raf = springs.size || hooks.size ? requestAnimationFrame(tick) : 0;
+}
+const lerp = (a, b, t) => a + (b - a) * t;
+
+/* ---------- Polar shapes: circle, clover, cookie, burst... all share one sampler so any two can morph ---------- */
+const SHAPES = [{k:0,a:0},{k:4,a:.14},{k:7,a:.07},{k:3,a:.17},{k:9,a:.055},{k:5,a:.11},{k:12,a:.04}];
+function polar(R, A, B, m, rot, cx = 0, cy = 0, N = 120){
+  let d = '';
+  for (let i = 0; i < N; i++){
+    const th = i / N * Math.PI * 2;
+    const ra = 1 + A.a * Math.cos(A.k * (th + rot)), rb = 1 + B.a * Math.cos(B.k * (th + rot));
+    const r = R * lerp(ra, rb, m);
+    d += (i ? 'L' : 'M') + (cx + r * Math.cos(th)).toFixed(2) + ' ' + (cy + r * Math.sin(th)).toFixed(2);
+  }
+  return d + 'Z';
+}
+
+/* ---------- Content ---------- */
+const TRACKS = [
+  {title:'Tidewater', artist:'Ona Vell · Low Light (Live)', len:222, pal:['#1f3b4d','#f28f6b','#f6d6a8','#5aa39a'],
+   lyric:'Salt on the glass and the lamps coming on,<br>I count every boat till the last one is home.'},
+  {title:'Paper Lanterns', artist:'The Halden Quartet · Small Hours', len:254, pal:['#2b1d3a','#e86f9a','#ffcf70','#7a6ff0'],
+   lyric:'We folded the evening and hung it to dry,<br>a row of small moons on a string through the sky.'},
+  {title:'Northbound', artist:'Mira Okafor · Slow Train', len:197, pal:['#14342b','#9bd17a','#f3efe0','#3fa7a0'],
+   lyric:'Take the slow train and leave the window down,<br>every field we pass a different shade of brown.'},
+];
+const fmt = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+let track = 0, pos = 0, playing = false;
+function drawCover(i){
+  const p = TRACKS[i].pal;
+  $('#cover').innerHTML = `<rect width="400" height="400" fill="${p[0]}"/>
+    <path d="${polar(150, SHAPES[2], SHAPES[2], 0, .2, 250, 150)}" fill="${p[1]}"/>
+    <path d="${polar(92, SHAPES[3], SHAPES[3], 0, .5, 120, 270)}" fill="${p[3]}"/>
+    <path d="${polar(52, SHAPES[6], SHAPES[6], 0, 0, 300, 320)}" fill="${p[2]}"/>`;
+}
+function showTrack(i, start = 0){
+  track = i; pos = start; const t = TRACKS[i];
+  drawCover(i); $('#tTitle').textContent = t.title; $('#tArtist').textContent = t.artist; $('#tLen').textContent = fmt(t.len);
+  renderPanel(); drawProgress();
+}
+
+/* ---------- Wavy progress: amplitude springs up while playing, flattens on pause ---------- */
+let phase = 0, ampV = 0;
+const amp = new Spring(0, 220, 22, v => { ampV = v; if (TRACKS) drawProgress(); }, .01);
+function drawProgress(){
+  const W = 300, x = Math.max(6, (pos / TRACKS[track].len) * W), A = ampV;
+  let d = 'M2 14';
+  for (let px = 2; px <= x - 6; px += 3) d += `L${px} ${(14 + A * Math.sin(px / 7 - phase)).toFixed(2)}`;
+  $('#wave').setAttribute('d', d);
+  $('#rest').setAttribute('d', `M${Math.min(W - 2, x + 6)} 14L${W - 2} 14`);
+  $('#knob').setAttribute('x', x - 2);
+  $('#tNow').textContent = fmt(pos);
+}
+function playHook(dt){ pos = Math.min(TRACKS[track].len, pos + dt); if (!reduced.matches) phase += dt * 6; drawProgress(); }
+
+/* ---------- Play button: corner radius and scale on springs, icon morphs play to pause ---------- */
+const playBtn = $('#play');
+const PLAY = [[[7,5],[12,8.2],[12,15.8],[7,19]],[[12,8.2],[18.5,12],[18.5,12],[12,15.8]]];
+const PAUSE = [[[6.5,5],[10,5],[10,19],[6.5,19]],[[14,5],[17.5,5],[17.5,19],[14,19]]];
+const icon = new Spring(0, 420, 30, m => {
+  ['#pa','#pb'].forEach((id, j) => $(id).setAttribute('d', 'M' + PLAY[j].map((p, i) => lerp(p[0], PAUSE[j][i][0], m).toFixed(2) + ' ' + lerp(p[1], PAUSE[j][i][1], m).toFixed(2)).join('L') + 'Z'));
+});
+let rad = 46, sx = 1, sy = 1;
+const applyPlay = () => { playBtn.style.borderRadius = Math.max(4, rad) + 'px'; playBtn.style.transform = `scale(${sx},${sy})`; };
+const radius = new Spring(46, 380, 14, v => { rad = v; applyPlay(); }, .05);      // low damping: visible overshoot when the shape morphs
+const scaleX = new Spring(1, 520, 20, v => { sx = v; applyPlay(); });
+const scaleY = new Spring(1, 520, 20, v => { sy = v; applyPlay(); });
+function pressPlay(){ scaleX.to(.94); scaleY.to(.88); radius.to(playing ? 34 : 30); }
+function releasePlay(){ scaleX.to(1, 1.2); scaleY.to(1, 2.4); setPlaying(!playing); }
+function setPlaying(on){
+  playing = on; playBtn.setAttribute('aria-label', on ? 'Pause' : 'Play');
+  radius.to(on ? 24 : 46); icon.to(on ? 1 : 0); amp.to(on ? 3.2 : 0);
+  on ? hooks.add(playHook) : hooks.delete(playHook); kick();
+}
+playBtn.addEventListener('pointerdown', e => { if (e.button === 0) pressPlay(); });
+playBtn.addEventListener('pointerup', releasePlay);
+playBtn.addEventListener('pointerleave', e => { if (e.buttons) { scaleX.to(1); scaleY.to(1); radius.to(playing ? 24 : 46); } });
+playBtn.addEventListener('keydown', e => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat){ e.preventDefault(); pressPlay(); } });
+playBtn.addEventListener('keyup', e => { if (e.key === ' ' || e.key === 'Enter'){ e.preventDefault(); releasePlay(); } });
+
+/* ---------- Loading indicator: morphs through shapes while it spins ---------- */
+let shapeI = 0, shapeT = 0, spin = 0;
+const morph = new Spring(0, 160, 11, () => {}, .002);
+function loaderHook(dt){
+  shapeT += dt; spin += dt * (reduced.matches ? 0 : 2.4) + morph.vel * dt * .9;
+  if (shapeT > .55){ shapeT = 0; shapeI = (shapeI + 1) % SHAPES.length; morph.set(0); morph.to(1); }
+  const A = SHAPES[shapeI], B = SHAPES[(shapeI + 1) % SHAPES.length];
+  $('#loaderPath').setAttribute('d', polar(30, A, B, Math.max(-.2, morph.v), 0, 0, 0, 90));
+  $('#loaderPath').setAttribute('transform', `rotate(${(spin * 57.3) % 360})`);
+}
+let loadTimer = 0;
+function changeTrack(dir){
+  clearTimeout(loadTimer);
+  const wasPlaying = playing; hooks.delete(playHook);
+  $('#loader').classList.add('on'); shapeT = 0; morph.set(0); morph.to(1); hooks.add(loaderHook); kick();
+  loadTimer = setTimeout(() => {
+    showTrack((track + dir + TRACKS.length) % TRACKS.length);
+    $('#loader').classList.remove('on'); setTimeout(() => hooks.delete(loaderHook), 220);
+    if (wasPlaying) hooks.add(playHook), kick();
+  }, 2100);
+}
+$('#next').addEventListener('click', () => changeTrack(1));
+$('#prev').addEventListener('click', () => changeTrack(-1));
+
+/* ---------- Connected button group: pressed button widens, neighbours give way, selection settles on springs ---------- */
+const GROUP = [
+  {id:'lyrics', label:'Lyrics', icon:'<path d="M5 7h14M5 12h10M5 17h7"/>'},
+  {id:'next', label:'Up next', icon:'<path d="M4 6h11M4 12h11M4 18h7M18 14v6M15 17h6"/>'},
+  {id:'sleep', label:'Sleep', icon:'<path d="M19 14.5A7.5 7.5 0 019.5 5a7.5 7.5 0 109.5 9.5z"/>'},
+  {id:'device', label:'Device', icon:'<rect x="7" y="3" width="10" height="18" rx="2.5"/><circle cx="12" cy="14.5" r="2.5"/><path d="M12 7h.01"/>'},
+];
+let sel = 0, pressing = -1;
+const gEl = $('#group');
+const gBtns = GROUP.map((g, i) => {
+  const b = document.createElement('button');
+  b.innerHTML = `<svg class="ico" viewBox="0 0 24 24">${g.icon}</svg><span class="lbl">${g.label}</span>`;
+  b.setAttribute('aria-label', g.label); gEl.appendChild(b);
+  b.addEventListener('pointerdown', e => { if (e.button === 0){ pressing = i; weigh(); } });
+  b.addEventListener('pointerleave', () => { if (pressing === i){ pressing = -1; weigh(); } });
+  b.addEventListener('keydown', e => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat){ pressing = i; weigh(); } });
+  b.addEventListener('click', () => { pressing = -1; select(i); });
+  return b;
+});
+const weights = gBtns.map((b, i) => new Spring(1, 340, 19, v => b.style.flexGrow = Math.max(.3, v), .002));
+function weigh(){
+  weights.forEach((w, i) => {
+    let t = i === sel ? 2.3 : 1;
+    if (pressing >= 0){ if (i === pressing) t += .45; else if (Math.abs(i - pressing) === 1) t -= .22; }
+    w.to(t);
+  });
+}
+function select(i){ sel = i; gBtns.forEach((b, j) => b.setAttribute('aria-pressed', String(j === i))); weigh(); renderPanel(true); }
+function renderPanel(animate){
+  const p = $('#panel'), t = TRACKS[track], n1 = TRACKS[(track + 1) % 3], n2 = TRACKS[(track + 2) % 3];
+  p.innerHTML = [
+    `<span class="k">Lyrics</span>${t.lyric}`,
+    `<span class="k">Up next</span>${n1.title} <em>· ${n1.artist.split(' · ')[0]}</em><br>${n2.title} <em>· ${n2.artist.split(' · ')[0]}</em>`,
+    `<span class="k">Sleep timer</span>Playback stops at the end of this track.<br><em>Tap again to set 30 or 60 minutes.</em>`,
+    `<span class="k">Playing on</span>This phone<br><em>Kitchen speaker and Car are nearby</em>`,
+  ][sel];
+  if (animate){ p.classList.remove('swap'); void p.offsetWidth; p.classList.add('swap'); }
+}
+
+/* ---------- FAB to menu: one spring drives size and corner radius, so it can reverse mid-flight ---------- */
+const fab = $('#fab'), fabBtn = $('#fabBtn'), menu = $('#menu'), fabIco = $('#fabIco');
+const ACTIONS = [
+  {label:'Add to playlist', icon:'<path d="M4 6h12M4 12h12M4 18h7M18 15v6M15 18h6"/>'},
+  {label:'Save to library', icon:'<path d="M12 20s-7-4.4-7-10a4 4 0 017-2.6A4 4 0 0119 10c0 5.6-7 10-7 10z"/>', toast:'Saved to library'},
+  {label:'Start track radio', icon:'<circle cx="12" cy="12" r="2"/><path d="M7.8 7.8a6 6 0 000 8.4M16.2 7.8a6 6 0 010 8.4M5 5a10 10 0 000 14M19 5a10 10 0 010 14"/>', toast:'Radio started from this track'},
+  {label:'Share', icon:'<path d="M12 15V4M8 8l4-4 4 4M6 12v6a2 2 0 002 2h8a2 2 0 002-2v-6"/>', toast:'Link copied'},
+];
+menu.innerHTML = ACTIONS.map(a => `<li role="none"><button role="menuitem" tabindex="-1"><svg class="ico" viewBox="0 0 24 24">${a.icon}</svg>${a.label}</button></li>`).join('');
+const items = [...menu.querySelectorAll('button')];
+let fabOpen = false;
+const PW = () => Math.min(248, $('#player').clientWidth - 40), PH = 8 + ACTIONS.length * 48 + 56;
+const fabS = new Spring(0, 300, 21, p => {
+  fab.style.width = lerp(56, PW(), p) + 'px'; fab.style.height = lerp(56, PH, p) + 'px';
+  fab.style.borderRadius = lerp(16, 28, Math.min(1, Math.max(0, p))) + 'px';
+  menu.style.opacity = Math.max(0, Math.min(1, (p - .45) / .45));
+  fabIco.style.transform = `rotate(${p * 135}deg)`; fabIco.style.transformOrigin = '12px 12px';
+}, .002);
+function setFab(open, focus = true){
+  fabOpen = open; fabBtn.setAttribute('aria-expanded', String(open)); fabBtn.setAttribute('aria-label', open ? 'Close actions' : 'Track actions');
+  if (open){ menu.hidden = false; if (focus) setTimeout(() => items[0].focus({preventScroll:true}), reduced.matches ? 0 : 160); }
+  fabS.to(open ? 1 : 0);
+  if (!open){ const t = setInterval(() => { if (!fabOpen && fabS.v < .3){ menu.hidden = true; clearInterval(t); } else if (fabOpen) clearInterval(t); }, 40); }
+}
+fabBtn.addEventListener('click', () => { setFab(!fabOpen); if (!fabOpen) fabBtn.focus(); });
+items.forEach((b, i) => b.addEventListener('click', () => { setFab(false); fabBtn.focus({preventScroll:true}); if (ACTIONS[i].toast) toast(ACTIONS[i].toast); }));
+menu.addEventListener('keydown', e => {
+  const i = items.indexOf(document.activeElement);
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp'){ e.preventDefault(); items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus(); }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && fabOpen){ setFab(false); fabBtn.focus(); } });
+document.addEventListener('pointerdown', e => { if (fabOpen && !fab.contains(e.target)) setFab(false); });
+let toastTimer = 0;
+function toast(msg){
+  $('#snackText').textContent = msg; $('#snack').classList.add('on');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#snack').classList.remove('on'), 2600);
+}
+$('#undo').addEventListener('click', () => { clearTimeout(toastTimer); $('#snack').classList.remove('on'); });
+
+/* Space toggles playback when focus is not on a control */
+document.addEventListener('keydown', e => { if (e.key === ' ' && !e.target.closest('button')){ e.preventDefault(); setPlaying(!playing); } });
+
+/* ---------- Autoplay ---------- */
+const touch = $('#touch');
+let auto = new URLSearchParams(location.search).has('autoplay'), token = 0;
+const wait = ms => new Promise((res, rej) => { const t = token; setTimeout(() => t === token && auto ? res() : rej('stopped'), ms); });
+function stopAuto(){ if (!auto) return; auto = false; token++; touch.className = 'touch'; items.forEach(b => b.classList.remove('hot')); }
+['pointerdown','keydown','wheel','touchstart'].forEach(t => addEventListener(t, e => { if (e.isTrusted) stopAuto(); }, {capture:true, passive:true}));
+async function moveTo(el, ms = 420){
+  const r = el.getBoundingClientRect();
+  touch.style.transition = `opacity .18s, scale .15s, translate ${reduced.matches ? 0 : ms}ms cubic-bezier(.16,1,.3,1)`;
+  touch.style.translate = `${r.left + r.width / 2}px ${r.top + r.height / 2}px`; touch.classList.add('on'); await wait(ms);
+}
+const fire = (el, type) => el.dispatchEvent(new PointerEvent(type, {bubbles:true, button:0, buttons:type === 'pointerdown' ? 1 : 0}));
+async function tap(el, hold = 160){
+  await moveTo(el); touch.classList.add('down'); fire(el, 'pointerdown'); await wait(hold);
+  touch.classList.remove('down'); fire(el, 'pointerup'); if (el !== playBtn) el.click();
+}
+function reset(){
+  setFab(false, false); fabS.set(0); menu.hidden = true; hooks.delete(playHook); playing = true; setPlaying(false);
+  radius.set(46); icon.set(0); amp.set(0); clearTimeout(loadTimer); $('#loader').classList.remove('on');
+  showTrack(0, 84); select(0); $('#snack').classList.remove('on');
+}
+async function script(){
+  await wait(800);
+  await tap(playBtn); await wait(1500);
+  await tap(gBtns[1], 220); await wait(1300);
+  await tap(gBtns[3], 220); await wait(1200);
+  await tap($('#next')); await wait(2700);
+  await tap(fabBtn); await wait(700);
+  await moveTo(items[1], 380); items[1].classList.add('hot'); await wait(450);
+  touch.classList.add('down'); await wait(150); touch.classList.remove('down'); items[1].classList.remove('hot'); items[1].click(); await wait(1500);
+  await tap(gBtns[0], 220); await wait(1000);
+  await tap(playBtn); await wait(900);
+  touch.classList.remove('on');
+}
+async function run(){ while (auto){ try { reset(); await script(); await wait(2000); } catch { return; } } }
+
+showTrack(0, 84); select(0);
+if (auto) run();
+})();
+</script>
+</body>
+</html>

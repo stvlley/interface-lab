@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Answer Becomes Page</title>
+<link rel="stylesheet" href="../lab.css">
+<style>
+::selection{background:color-mix(in srgb,var(--accent) 28%,transparent)}
+body{overflow-x:hidden}
+[hidden]{display:none!important}
+.wrap{max-width:940px;margin:0 auto;padding:14px 16px 20px;display:flex;flex-direction:column;gap:8px;min-height:100%}
+.num{font-variant-numeric:tabular-nums}
+
+/* Question field */
+.ask{display:flex;gap:8px;align-items:center;background:var(--raised);border:1px solid var(--line);border-radius:999px;padding:5px 5px 5px 18px;box-shadow:var(--shadow);transition:border-color .2s}
+.ask:focus-within{border-color:color-mix(in srgb,var(--accent) 60%,var(--line))}
+.ask input{flex:1;min-width:0;border:0;background:none;color:var(--ink);font:inherit;font-size:16px;height:40px;outline:none;caret-color:var(--accent)}
+.ask input::placeholder{color:var(--muted)}
+.ask .pill{display:inline-flex;align-items:center;gap:6px;font-weight:600}
+.ask .pill:disabled{opacity:.5;cursor:default}
+
+/* Empty state */
+.empty{flex:1;display:grid;place-content:center;text-align:center;gap:14px;padding:24px 0;color:var(--muted)}
+.empty p{margin:0;max-width:34ch}
+.empty .chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:8px 14px;font-size:14px;cursor:pointer;color:var(--ink);transition:background .15s,border-color .15s}
+.chip:hover{border-color:color-mix(in srgb,var(--accent) 50%,var(--line))}
+
+/* Build status */
+.status{display:flex;align-items:center;gap:12px;font-size:14px;color:var(--muted);min-height:22px;margin:0}
+.status b{color:var(--ink);font-weight:600}
+.ticks{display:flex;gap:4px}
+.ticks i{width:18px;height:4px;border-radius:2px;background:var(--line);transition:background .2s}
+.ticks i.on{background:var(--accent)}
+.status svg{color:var(--ok);flex:none}
+
+/* The built page */
+.page{display:grid;grid-template-columns:1.12fr 1fr;grid-template-areas:"head head" "time map" "time cost";gap:10px 18px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:14px 18px 12px;box-shadow:var(--shadow)}
+.page[hidden]{display:none}
+.part{position:relative;border-radius:var(--r-md);min-height:60px}
+.part:not(.in){outline:1.5px dashed var(--line);outline-offset:-1.5px}
+.part:not(.in)>.body{visibility:hidden}
+.part:not(.in)::before{content:attr(data-name);position:absolute;inset:0;display:grid;place-items:center;font-size:13px;color:var(--muted);transition:color .15s}
+.part.now{outline-color:var(--accent)}
+.part.now::before{color:var(--accent);font-weight:600}
+.part.in>.body{animation:assemble .38s var(--ease) both}
+@keyframes assemble{from{clip-path:inset(0 0 100% 0);transform:translateY(8px)}to{clip-path:inset(0 0 0 0);transform:none}}
+.head{grid-area:head}.time{grid-area:time}.map{grid-area:map}.cost{grid-area:cost}
+
+.head .body{display:flex;gap:16px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap}
+.head h2{margin:0;font-size:clamp(20px,2.6vw,26px);line-height:1.15;letter-spacing:-.02em;text-wrap:balance}
+.head p{margin:4px 0 0;color:var(--muted);font-size:14px}
+.head .meta b{color:var(--ink);font-weight:600}
+
+/* Switch */
+.switch{display:inline-flex;align-items:center;gap:10px;border:1px solid var(--line);background:var(--raised);border-radius:999px;padding:6px 8px 6px 14px;cursor:pointer;font-size:14px;font-weight:600;min-height:40px}
+.switch .track{width:38px;height:22px;border-radius:999px;background:var(--line);position:relative;transition:background .2s}
+.switch .track::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--raised);box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .25s var(--spring)}
+.switch[aria-checked="true"] .track{background:var(--accent)}
+.switch[aria-checked="true"] .track::after{transform:translateX(16px)}
+
+/* Timeline */
+.time ol{list-style:none;margin:0;padding:0;position:relative}
+.time ol::before{content:"";position:absolute;left:58px;top:14px;bottom:14px;width:2px;background:var(--line);border-radius:1px}
+.time li{display:grid;grid-template-columns:48px 20px 1fr auto;gap:0 10px;align-items:start;padding:6px 4px;border-radius:12px;position:relative;transition:background .15s}
+.time li:hover{background:color-mix(in srgb,var(--ink) 4%,transparent)}
+.time .t{font-size:14px;font-weight:600;padding-top:1px}
+.time .dot{width:12px;height:12px;border-radius:50%;margin:5px 0 0 4px;background:var(--surface);border:2.5px solid var(--accent);display:grid;place-items:center;font-size:0}
+.time .what{min-width:0}
+.time .what b{display:block;font-weight:600;font-size:15px;line-height:1.3}
+.time .what span{display:block;color:var(--muted);font-size:13px;line-height:1.35}
+.time .n{font-size:12px;font-weight:700;color:var(--accent);padding-top:2px}
+.time li.flash .t{animation:flash .9s var(--ease)}
+@keyframes flash{0%{color:var(--accent)}100%{color:var(--ink)}}
+.part.just-in li{animation:itemIn .3s var(--ease) both;animation-delay:calc(var(--i) * 45ms + 120ms)}
+@keyframes itemIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}
+
+/* Map */
+.map .body{position:relative}
+.map svg{width:100%;height:auto;display:block;border-radius:12px;background:color-mix(in srgb,var(--ink) 3%,var(--surface));border:1px solid var(--line)}
+.map .river{fill:color-mix(in srgb,var(--accent) 14%,transparent)}
+.map .district{fill:var(--muted);font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.map .leg{fill:none;stroke-linecap:round;stroke-width:2.5}
+.map .leg.walk{stroke:var(--accent)}
+.map .leg.ride{stroke:var(--muted);stroke-dasharray:4 4;stroke-width:2}
+.map .mk circle{fill:var(--accent)}
+.map .mk text{fill:var(--accent-ink);font-size:9px;font-weight:700;text-anchor:middle;dominant-baseline:central}
+.map .mk{transition:opacity .25s}
+.legend{position:absolute;left:10px;top:8px;display:flex;flex-direction:column;gap:2px;font-size:11px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend svg{width:22px;height:6px;border:0;background:none;border-radius:0}
+
+/* Costs */
+.cost table{width:100%;border-collapse:collapse;font-size:13.5px}
+.cost td{padding:2px 2px;border-bottom:1px solid var(--line)}
+.cost td:last-child{text-align:right;font-variant-numeric:tabular-nums}
+.cost tr.total td{border-bottom:0;font-weight:700;padding-top:6px}
+.cost tr.changed td{animation:rowflash 1s var(--ease)}
+@keyframes rowflash{0%{background:color-mix(in srgb,var(--accent) 16%,transparent)}100%{background:transparent}}
+.cost caption{text-align:left;font-size:12px;color:var(--muted);padding-bottom:4px}
+
+/* Synthetic cursor */
+.ghost{position:fixed;left:0;top:0;z-index:99;pointer-events:none;opacity:0;transition:transform .65s var(--ease),opacity .2s}
+.ghost.on{opacity:1}
+.ghost svg{display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.3))}
+.ghost::after{content:"";position:absolute;left:-14px;top:-14px;width:28px;height:28px;border-radius:50%;background:var(--accent);opacity:0}
+.ghost.tap::after{animation:tap .45s var(--ease)}
+@keyframes tap{from{opacity:.4;transform:scale(.3)}to{opacity:0;transform:scale(1.4)}}
+
+@media (max-width:700px){
+ .page{grid-template-columns:1fr;grid-template-areas:"head" "time" "map" "cost";padding:14px}
+ .time ol::before{left:52px}
+ .time li{grid-template-columns:42px 20px 1fr auto;gap:0 8px}
+}
+@media (prefers-reduced-motion:reduce){.ghost{transition:opacity .2s}}
+</style>
+</head>
+<body>
+<main class="wrap">
+ <form class="ask" id="ask" role="search">
+  <label for="q" class="sr" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Ask a question</label>
+  <input id="q" autocomplete="off" placeholder="Ask anything, get a page back">
+  <button class="pill primary" id="go" type="submit">Ask
+   <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </button>
+ </form>
+
+ <p class="status" id="status" aria-live="polite"></p>
+
+ <section class="empty" id="empty">
+  <p>Ask for a plan, a comparison or a how-to. The answer comes back as a page you can change.</p>
+  <div class="chips">
+   <button class="chip" type="button" data-q="Plan a rainy Saturday in Lisbon with a 7-year-old">Plan a rainy Saturday in Lisbon with a 7-year-old</button>
+  </div>
+ </section>
+
+ <article class="page" id="page" hidden aria-label="Answer">
+  <section class="part head" data-name="Header">
+   <div class="body">
+    <div>
+     <h2 id="title">Rainy Saturday in Lisbon, with a 7-year-old</h2>
+     <p class="meta" id="meta"></p>
+    </div>
+    <button class="switch" id="less" type="button" role="switch" aria-checked="false">Less walking <span class="track" aria-hidden="true"></span></button>
+   </div>
+  </section>
+  <section class="part time" data-name="Timeline of the day" aria-label="Timeline of the day">
+   <div class="body"><ol id="tl"></ol></div>
+  </section>
+  <section class="part map" data-name="Route diagram" aria-label="Route diagram">
+   <div class="body">
+    <svg id="map" viewBox="0 3 320 133" role="img" aria-label="Route between stops"></svg>
+    <div class="legend" aria-hidden="true">
+     <span><svg viewBox="0 0 22 6"><path d="M1 3h20" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round"/></svg>On foot</span>
+     <span><svg viewBox="0 0 22 6"><path d="M1 3h20" stroke="var(--muted)" stroke-width="2" stroke-dasharray="4 4"/></svg>Bus, train or taxi</span>
+    </div>
+   </div>
+  </section>
+  <section class="part cost" data-name="Cost table" aria-label="Costs">
+   <div class="body"><table><caption>Two adults and one child</caption><tbody id="costs"></tbody></table></div>
+  </section>
+ </article>
+</main>
+<div class="ghost" aria-hidden="true"><svg width="20" height="22" viewBox="0 0 20 22"><path d="M2 1.5v16.5l4.6-4.3 3 6.8 3.2-1.4-3-6.6 6.4-.3z" fill="var(--ink)" stroke="var(--surface)" stroke-width="1.5" stroke-linejoin="round"/></svg></div>
+
+<script>
+const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $=s=>document.querySelector(s);
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+
+/* Places: map position and the paid line they add. */
+const P={
+ brk:{t:'Pastries and hot chocolate',x:122,y:78,cost:['Breakfast',14]},
+ tile:{t:'Tile museum, family trail',x:200,y:64,cost:['Tile museum',10]},
+ mkt:{t:'Lunch at the covered market',x:70,y:96,cost:['Lunch, market stalls',32]},
+ sci:{t:'Hands-on science floor',x:262,y:54,cost:['Science floor',19]},
+ aq:{t:'Aquarium, the big ocean tank',x:296,y:30,cost:['Aquarium',40]},
+ hall:{t:'Lunch in the indoor food hall',x:300,y:60,cost:['Lunch, food hall',28]},
+ play:{t:'Indoor play room, ages 4 to 10',x:236,y:32,cost:['Play room',8]}
+};
+const PLANS={
+ std:{walk:3.2,extra:[['Bus and train passes',19]],stops:[
+  {id:'brk',at:'09:30',via:'Start near Rossio',m:'walk'},
+  {id:'tile',at:'10:30',via:'Bus, 18 min, then 0.4 km on foot',m:'ride'},
+  {id:'mkt',at:'12:45',via:'Train, then 1.0 km on foot',m:'ride'},
+  {id:'sci',at:'14:30',via:'Metro, 25 min, then 0.9 km on foot',m:'ride'},
+  {id:'aq',at:'16:45',via:'0.6 km on foot past the marina',m:'walk'}]},
+ less:{walk:0.8,extra:[['Taxi there and back',26]],stops:[
+  {id:'brk',at:'09:30',via:'Start near Rossio',m:'walk'},
+  {id:'aq',at:'10:30',via:'Taxi, 15 min, door to door',m:'ride'},
+  {id:'hall',at:'13:00',via:'Covered walkway, 3 min',m:'walk'},
+  {id:'sci',at:'14:15',via:'Same building, upstairs',m:'walk'},
+  {id:'play',at:'16:15',via:'Covered walkway, 4 min',m:'walk'}]}
+};
+let plan='std';
+const total=k=>PLANS[k].stops.reduce((s,x)=>s+P[x.id].cost[1],0)+PLANS[k].extra.reduce((s,x)=>s+x[1],0);
+
+/* ---------- Timeline ---------- */
+function liFor(s,i){
+ const li=document.createElement('li');li.dataset.id=s.id;li.style.setProperty('--i',i);
+ li.innerHTML=`<span class="t num"></span><span class="dot"></span><span class="what"><b></b><span></span></span><span class="n num"></span>`;
+ fillLi(li,s,i);return li;
+}
+function fillLi(li,s,i){
+ li.querySelector('.t').textContent=s.at;
+ li.querySelector('.what b').textContent=P[s.id].t;
+ li.querySelector('.what span').textContent=s.via;
+ li.querySelector('.n').textContent='€'+P[s.id].cost[1];
+ li.style.setProperty('--i',i);
+}
+function renderTimeline(animate){
+ const ol=$('#tl'),stops=PLANS[plan].stops;
+ if(!animate){ol.replaceChildren(...stops.map(liFor));return}
+ const before=new Map([...ol.children].map(li=>[li.dataset.id,li.getBoundingClientRect()]));
+ const olBox=ol.getBoundingClientRect();
+ const keep=new Set(stops.map(s=>s.id));
+ // Leaving stops: hold them where they were and let them fall away.
+ [...ol.children].forEach(li=>{
+  if(keep.has(li.dataset.id))return;
+  const r=before.get(li.dataset.id),c=li.cloneNode(true);
+  Object.assign(c.style,{position:'absolute',left:(r.left-olBox.left)+'px',top:(r.top-olBox.top)+'px',width:r.width+'px',pointerEvents:'none',margin:0});
+  ol.append(c);
+  c.animate([{opacity:1},{opacity:0,transform:'translateX(-12px)'}],{duration:180,easing:'cubic-bezier(.7,0,.84,0)',fill:'forwards'}).onfinish=()=>c.remove();
+ });
+ const nodes=stops.map((s,i)=>{
+  let li=[...ol.children].find(n=>n.dataset.id===s.id&&n.style.position!=='absolute');
+  const changed=li&&li.querySelector('.t').textContent!==s.at;
+  if(li)fillLi(li,s,i);else li=liFor(s,i);
+  if(changed){li.classList.remove('flash');void li.offsetWidth;li.classList.add('flash')}
+  return li;
+ });
+ const ghosts=[...ol.children].filter(n=>n.style.position==='absolute');
+ ol.replaceChildren(...nodes,...ghosts);
+ nodes.forEach((li,i)=>{
+  const was=before.get(li.dataset.id);
+  if(!was||!keep.has(li.dataset.id)||!before.has(li.dataset.id)){
+   li.animate([{opacity:0,transform:'translateX(10px)'},{opacity:1,transform:'none'}],{duration:280,delay:140+i*30,easing:'cubic-bezier(.16,1,.3,1)',fill:'backwards'});return;
+  }
+  const now=li.getBoundingClientRect(),dy=was.top-now.top;
+  if(Math.abs(dy)>1)li.animate([{transform:`translateY(${dy}px)`},{transform:'none'}],{duration:420,easing:'cubic-bezier(.16,1,.3,1)'});
+ });
+}
+
+/* ---------- Route diagram ---------- */
+const NS='http://www.w3.org/2000/svg';
+function el(tag,attrs,parent){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);parent&&parent.append(e);return e}
+function drawMapBase(){
+ const svg=$('#map');svg.replaceChildren();
+ el('path',{class:'river',d:'M0 128 C70 120 140 132 205 108 S290 80 320 76 L320 140 L0 140Z'},svg);
+ const lab=(x,y,t,a='start')=>{const e=el('text',{class:'district',x,y,'text-anchor':a},svg);e.textContent=t};
+ lab(122,96,'Baixa','middle');lab(70,114,'Cais do Sodré','middle');lab(200,82,'Xabregas','middle');lab(312,12,'Parque das Nações','end');
+ const riv=el('text',{class:'district',x:150,y:134,'font-style':'italic'},svg);riv.textContent='River';
+ el('defs',{},svg).innerHTML='<mask id="reveal" maskUnits="userSpaceOnUse" x="0" y="0" width="320" height="140"></mask>';
+ el('g',{id:'legs',mask:'url(#reveal)'},svg);el('g',{id:'marks'},svg);
+}
+function renderMap(animate){
+ const stops=PLANS[plan].stops,legs=$('#legs'),mask=$('#reveal'),marks=$('#marks');
+ legs.replaceChildren();mask.replaceChildren();
+ stops.forEach((s,i)=>{
+  if(!i)return;const a=P[stops[i-1].id],b=P[s.id];
+  const mx=(a.x+b.x)/2,my=(a.y+b.y)/2-Math.min(26,Math.hypot(b.x-a.x,b.y-a.y)*.25);
+  const d=`M${a.x} ${a.y} Q${mx} ${my} ${b.x} ${b.y}`;
+  el('path',{class:'leg '+s.m,d},legs);
+  const m=el('path',{d,fill:'none',stroke:'#fff','stroke-width':8,pathLength:1,'stroke-dasharray':1,'stroke-dashoffset':animate&&!RM?1:0},mask);
+  if(animate&&!RM)m.animate([{strokeDashoffset:1},{strokeDashoffset:0}],{duration:260,delay:120+(i-1)*190,easing:'cubic-bezier(.4,0,.2,1)',fill:'forwards'});
+ });
+ const seen=new Set();
+ stops.forEach((s,i)=>{
+  seen.add(s.id);let g=marks.querySelector(`[data-id="${s.id}"]`);
+  if(!g){g=el('g',{class:'mk','data-id':s.id,transform:`translate(${P[s.id].x} ${P[s.id].y})`},marks);el('circle',{r:8},g);el('text',{},g);
+   if(animate&&!RM)g.animate([{opacity:0},{opacity:1}],{duration:200,delay:120+Math.max(0,i-1)*190+200,fill:'backwards'})}
+  g.querySelector('text').textContent=i+1;
+ });
+ [...marks.children].forEach(g=>{if(!seen.has(g.dataset.id)){g.style.opacity=0;setTimeout(()=>g.isConnected&&!PLANS[plan].stops.some(s=>s.id===g.dataset.id)&&g.remove(),260)}else g.style.opacity=1});
+}
+
+/* ---------- Costs ---------- */
+let shownTotal=0;
+function renderCosts(animate){
+ const k=PLANS[plan],rows=[...k.stops.map(s=>P[s.id].cost),...k.extra];
+ const old=new Set([...$('#costs').querySelectorAll('tr:not(.total)')].map(r=>r.dataset.k));
+ const body=$('#costs');body.replaceChildren();
+ rows.forEach(([name,eur],i)=>{const tr=document.createElement('tr');tr.dataset.k=name;tr.style.setProperty('--i',i);
+  tr.innerHTML=`<td></td><td>€${eur}</td>`;tr.firstChild.textContent=name;
+  if(animate&&!old.has(name))tr.className='changed';body.append(tr)});
+ const tr=document.createElement('tr');tr.className='total';tr.innerHTML='<td>Total</td><td class="num"></td>';body.append(tr);
+ const to=total(plan),from=animate?shownTotal:to,cell=tr.lastChild,t0=performance.now();
+ const step=t=>{const p=Math.min(1,(t-t0)/450),v=Math.round(from+(to-from)*(1-Math.pow(1-p,3)));cell.textContent='€'+v;if(p<1&&!RM)requestAnimationFrame(step);else cell.textContent='€'+to};
+ requestAnimationFrame(step);shownTotal=to;
+}
+function renderMeta(){
+ const k=PLANS[plan];
+ $('#meta').innerHTML=`${k.stops.length} stops, mostly indoors · <b class="num">${k.walk.toFixed(1)} km</b> on foot · <b class="num">€${total(plan)}</b>`;
+}
+
+/* ---------- Build ---------- */
+const PARTS=[['.head','Header'],['.time','Timeline of the day'],['.map','Route diagram'],['.cost','Cost table'],['#less','Plan switch']];
+let token=0,building=false;
+async function build(q){
+ const me=++token;building=true;$('#go').disabled=true;
+ plan='std';$('#less').setAttribute('aria-checked','false');
+ $('#empty').hidden=true;const page=$('#page');page.hidden=false;
+ page.querySelectorAll('.part').forEach(p=>p.classList.remove('in','now','just-in'));
+ $('#less').style.visibility='hidden';
+ const st=$('#status'),ticks=PARTS.map(()=>'<i></i>').join('');
+ const say=(name,n)=>{st.innerHTML=`<span class="ticks" aria-hidden="true">${ticks}</span><span>Building <b></b> · ${n} of ${PARTS.length}</span>`;st.querySelector('b').textContent=name;st.querySelectorAll('.ticks i').forEach((t,i)=>t.classList.toggle('on',i<n))};
+ say('layout',0);await wait(RM?150:420);if(me!==token)return;
+ for(let i=0;i<PARTS.length;i++){
+  const [sel,name]=PARTS[i],node=$(sel);
+  say(name,i+1);
+  if(node.classList.contains('part')){node.classList.add('now');await wait(RM?120:240);if(me!==token)return;node.classList.remove('now')}
+  if(sel==='.head')renderMeta();
+  if(sel==='.time')renderTimeline(false);
+  if(sel==='.map'){drawMapBase();renderMap(true)}
+  if(sel==='.cost'){shownTotal=0;renderCosts(true)}
+  if(sel==='#less'){node.style.visibility='';if(!RM)node.animate([{opacity:0,transform:'scale(.92)'},{opacity:1,transform:'none'}],{duration:260,easing:'cubic-bezier(.16,1,.3,1)'})}
+  else node.classList.add('in','just-in');
+  if(autoplaying&&!RM)node.scrollIntoView({block:'nearest',behavior:'smooth'});
+  await wait(RM?80:sel==='.map'?520:sel==='.time'?380:220);if(me!==token)return;
+ }
+ page.querySelectorAll('.part').forEach(p=>p.classList.remove('just-in'));
+ st.innerHTML='<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5 6.5 11.5 12.5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Built from 5 parts: header, timeline, route, costs and a plan switch</span>';
+ building=false;$('#go').disabled=false;
+}
+$('#ask').addEventListener('submit',e=>{e.preventDefault();const q=$('#q').value.trim()||$('#q').placeholder;if(!$('#q').value.trim())$('#q').value='Plan a rainy Saturday in Lisbon with a 7-year-old';build(q)});
+document.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>{$('#q').value=c.dataset.q;build(c.dataset.q)}));
+$('#less').addEventListener('click',()=>{
+ plan=plan==='std'?'less':'std';
+ $('#less').setAttribute('aria-checked',plan==='less');
+ renderMeta();renderTimeline(!RM);renderMap(true);renderCosts(true);
+});
+
+/* ---------- Autoplay ---------- */
+const AUTO=new URLSearchParams(location.search).has('autoplay');
+const ghost=$('.ghost');let run=0,autoplaying=false;
+function stop(){if(!autoplaying)return;autoplaying=false;run++;ghost.classList.remove('on')}
+['pointerdown','keydown','wheel','touchstart'].forEach(t=>addEventListener(t,e=>{if(e.isTrusted)stop()},{capture:true,passive:true}));
+function nap(ms){const r=run;return new Promise((ok,no)=>setTimeout(()=>r===run&&autoplaying?ok():no('stop'),ms))}
+async function glide(node,ax=.5,ay=.5,ms=650){
+ let b=node.getBoundingClientRect();
+ if(b.top<0||b.bottom>innerHeight){node.scrollIntoView({block:'center',behavior:RM?'auto':'smooth'});await nap(RM?60:400);b=node.getBoundingClientRect()}
+ ghost.style.transitionDuration=ms+'ms';ghost.style.transform=`translate(${b.left+b.width*ax}px,${b.top+b.height*ay}px)`;await nap(RM?80:ms);
+}
+async function tap(){ghost.classList.remove('tap');void ghost.offsetWidth;ghost.classList.add('tap');await nap(200)}
+function reset(){token++;building=false;$('#go').disabled=false;plan='std';$('#q').value='';$('#page').hidden=true;$('#empty').hidden=false;$('#status').textContent='';$('#less').setAttribute('aria-checked','false');scrollTo(0,0)}
+async function script(){
+ reset();
+ ghost.style.transitionDuration='0ms';ghost.style.transform=`translate(${innerWidth*.6}px,${innerHeight*.75}px)`;
+ await nap(60);ghost.classList.add('on');await nap(500);
+ const q=$('#q');await glide(q,.2,.5);await tap();q.focus({preventScroll:true});
+ for(const ch of 'Plan a rainy Saturday in Lisbon with a 7-year-old'){q.value+=ch;await nap(RM?10:34)}
+ await nap(300);await glide($('#go'));await tap();build(q.value);q.blur();
+ ghost.style.transitionDuration='900ms';ghost.style.transform=`translate(${innerWidth*.86}px,${Math.min(innerHeight*.5,420)}px)`;
+ await nap(RM?800:3000);
+ await glide($('#tl li:nth-child(5)'),.55,.5,700);await nap(900);
+ await glide($('#less'),.8,.5,700);await nap(250);await tap();$('#less').click();
+ await nap(1000);
+ if(innerWidth<=700){await glide($('#map'),.6,.5,600)}else{await glide($('#tl li:nth-child(2)'),.6,.5,600)}
+ await nap(1800);
+ await glide($('#less'),.8,.5,600);await tap();$('#less').click();await nap(1500);
+}
+async function loop(){autoplaying=true;while(autoplaying){try{await script();await nap(2000)}catch(e){if(e!=='stop')console.error(e);return}}}
+if(AUTO)loop();
+</script>
+</body>
+</html>

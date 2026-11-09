@@ -1,0 +1,28 @@
+/* Interface Lab: shared base for every pattern prototype. Tokens first; each prototype adds only its own styles. */
+:root{
+ --bg:#f4f3ef;--surface:#fffdf9;--raised:#ffffff;--ink:#17161a;--muted:#5d5a63;--line:rgba(23,22,26,.12);
+ --accent:#3b5bdb;--accent-ink:#ffffff;--ok:#1d7a52;--warn:#9a5b00;--crit:#b3261e;
+ --shadow:0 1px 2px rgba(23,22,26,.06),0 8px 24px rgba(23,22,26,.08);
+ --spring:cubic-bezier(.2,.9,.3,1.04);--ease:cubic-bezier(.16,1,.3,1);--exit:cubic-bezier(.7,0,.84,0);
+ --r-sm:10px;--r-md:16px;--r-lg:24px;
+ color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+ --bg:#0d0d10;--surface:#16161b;--raised:#1d1d24;--ink:#ecebf0;--muted:#9a98a3;--line:rgba(236,235,240,.12);
+ --accent:#9fb3ff;--accent-ink:#0d0d10;--ok:#5fd3a0;--warn:#f3c25c;--crit:#ff8a80;
+ --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.45);color-scheme:dark}}
+:root[data-theme="dark"]{
+ --bg:#0d0d10;--surface:#16161b;--raised:#1d1d24;--ink:#ecebf0;--muted:#9a98a3;--line:rgba(236,235,240,.12);
+ --accent:#9fb3ff;--accent-ink:#0d0d10;--ok:#5fd3a0;--warn:#f3c25c;--crit:#ff8a80;
+ --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.45);color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* A prototype fills its frame: a stage centred in the viewport. */
+.stage{min-height:100%;display:grid;place-items:center;padding:24px 16px}
+.label{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.pill{border:0;border-radius:999px;min-height:40px;padding:0 16px;background:var(--line);cursor:pointer}
+.pill.primary{background:var(--accent);color:var(--accent-ink)}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}

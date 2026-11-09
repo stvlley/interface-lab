@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Visual in Conversation</title>
+<link rel="stylesheet" href="../lab.css">
+<style>
+::selection{background:color-mix(in srgb,var(--accent) 28%,transparent)}
+[hidden]{display:none!important}
+body{overflow:hidden}
+.app{height:100vh;height:100dvh;max-width:720px;margin:0 auto;display:flex;flex-direction:column}
+.thread{flex:1;overflow-y:auto;overflow-x:hidden;padding:20px 16px 8px;display:flex;flex-direction:column;gap:14px;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.num{font-variant-numeric:tabular-nums}
+
+/* Messages */
+.msg{max-width:100%}
+.msg.me{align-self:flex-end;max-width:80%;background:var(--raised);border:1px solid var(--line);border-radius:18px 18px 6px 18px;padding:9px 14px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.msg.ai p{margin:0 0 10px;max-width:62ch}
+.msg.ai p:last-child{margin-bottom:0}
+.msg.ai blockquote{margin:6px 0 0;padding:10px 14px;border-radius:var(--r-sm);background:var(--raised);border:1px solid var(--line);max-width:62ch}
+.msg.enter{animation:msgIn .28s var(--ease) both}
+@keyframes msgIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.w{transition:opacity .18s}
+.w.pend{opacity:0}
+
+/* Visual card */
+.viz{border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);box-shadow:var(--shadow);margin-top:10px;transition:box-shadow .3s,border-color .3s}
+.viz.live{border-color:color-mix(in srgb,var(--accent) 55%,var(--line))}
+.viz-full{display:grid;grid-template-rows:1fr;transition:grid-template-rows .42s var(--ease),opacity .3s var(--ease)}
+.viz-full>.inner{overflow:hidden;min-height:0}
+.viz-line{display:grid;grid-template-rows:0fr;opacity:0;transition:grid-template-rows .42s var(--ease),opacity .3s var(--ease)}
+.viz-line>.inner{overflow:hidden;min-height:0}
+.viz.closed .viz-full{grid-template-rows:0fr;opacity:0}
+.viz.closed .viz-line{grid-template-rows:1fr;opacity:1}
+.pad{padding:14px 16px 12px}
+.vhead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.vtitle{font-weight:600;font-size:15px;line-height:1.3}
+.vsub{font-size:13px;color:var(--muted);min-height:18px}
+.vtotal{text-align:right;flex:none}
+.vtotal b{display:block;font-size:22px;letter-spacing:-.02em;line-height:1.1}
+.delta{display:inline-block;font-size:12px;font-weight:600;color:var(--ok);opacity:0;transform:translateY(-4px);transition:opacity .25s,transform .3s var(--ease)}
+.delta.on{opacity:1;transform:none}
+.chart{position:relative;margin-top:8px;touch-action:pan-y;outline:none;border-radius:8px}
+.chart:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+.chart svg{display:block;width:100%;height:170px;overflow:visible}
+.chart .gl{stroke:var(--line)}
+.chart .yl,.chart .xl{fill:var(--muted);font-size:11px}
+.chart .xl{text-anchor:middle}
+.chart .bar-grid{fill:var(--accent);transition:opacity .15s}
+.chart .bar-sol{fill:url(#hatch);stroke:var(--ok);stroke-width:1.25;transition:opacity .15s}
+.chart.scrub .m:not(.hot) rect{opacity:.35}
+.chart .xl.hot{fill:var(--ink);font-weight:700}
+.chart .mark{stroke:var(--ok);stroke-width:1.5;stroke-dasharray:3 3;opacity:0;transition:opacity .3s}
+.chart .mark-t{fill:var(--ok);font-size:11px;font-weight:600;opacity:0;transition:opacity .3s}
+.chart.solar .mark,.chart.solar .mark-t{opacity:1}
+.tip{position:absolute;left:0;top:0;pointer-events:none;background:var(--ink);color:var(--bg);font-size:12.5px;line-height:1.35;padding:6px 9px;border-radius:8px;white-space:nowrap;transform:translate(-50%,calc(-100% - 8px));opacity:0;transition:opacity .12s}
+.tip.on{opacity:1}
+.tip b{font-weight:700}
+.vfoot{display:flex;justify-content:space-between;align-items:center;gap:8px 10px;margin-top:8px;flex-wrap:wrap;min-height:28px}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:10px;height:10px;border-radius:2px;background:var(--accent)}
+.sw.sol{background:none;border:1.25px solid var(--ok);background-image:repeating-linear-gradient(135deg,var(--ok) 0 1.2px,transparent 1.2px 4px)}
+.legend .sol-l{opacity:0;transition:opacity .3s}
+.solar-on .legend .sol-l{opacity:1}
+.seg{display:none;border:1px solid var(--line);border-radius:999px;padding:2px}
+.solar-ever .seg{display:inline-flex;animation:segIn .3s var(--ease)}
+@keyframes segIn{from{opacity:0}to{opacity:1}}
+.seg button{border:0;background:none;border-radius:999px;padding:4px 11px;font-size:12.5px;cursor:pointer;color:var(--muted);min-height:28px}
+.seg button[aria-pressed="true"]{background:var(--raised);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12);font-weight:600}
+.line-btn{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;padding:10px 14px;text-align:left;cursor:pointer;font-size:14px;color:var(--muted);border-radius:var(--r-md)}
+.line-btn b{color:var(--ink);font-weight:600}
+.line-btn .show{margin-left:auto;color:var(--accent);font-weight:600;flex:none}
+.line-btn svg{flex:none;color:var(--accent)}
+
+/* Composer */
+.composer{padding:8px 16px 16px;display:flex;flex-direction:column;gap:8px}
+.chips{display:flex;gap:8px;overflow:hidden;min-height:34px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:13.5px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;transition:border-color .15s}
+.chip:hover{border-color:color-mix(in srgb,var(--accent) 50%,var(--line))}
+.box{display:flex;gap:8px;align-items:center;background:var(--raised);border:1px solid var(--line);border-radius:999px;padding:4px 4px 4px 16px;box-shadow:var(--shadow)}
+.box:focus-within{border-color:color-mix(in srgb,var(--accent) 60%,var(--line))}
+.box input{flex:1;min-width:0;border:0;background:none;color:var(--ink);font:inherit;height:40px;outline:none;caret-color:var(--accent)}
+.box input::placeholder{color:var(--muted)}
+.send{width:40px;height:40px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;cursor:pointer;flex:none}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* Synthetic cursor */
+.ghost{position:fixed;left:0;top:0;z-index:99;pointer-events:none;opacity:0;transition:transform .65s var(--ease),opacity .2s}
+.ghost.on{opacity:1}
+.ghost svg{display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.3))}
+.ghost::after{content:"";position:absolute;left:-14px;top:-14px;width:28px;height:28px;border-radius:50%;background:var(--accent);opacity:0}
+.ghost.tap::after{animation:tap .45s var(--ease)}
+@keyframes tap{from{opacity:.4;transform:scale(.3)}to{opacity:0;transform:scale(1.4)}}
+@media (prefers-reduced-motion:reduce){.ghost{transition:opacity .2s}}
+</style>
+</head>
+<body>
+<div class="app">
+ <div class="thread" id="thread" aria-live="polite"></div>
+ <form class="composer" id="composer">
+  <div class="chips" id="chips"></div>
+  <div class="box">
+   <label class="sr" for="say">Message</label>
+   <input id="say" autocomplete="off" placeholder="Ask a follow-up">
+   <button class="send" type="submit" aria-label="Send"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M9 14V4M4.5 8.5 9 4l4.5 4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </div>
+ </form>
+</div>
+<div class="ghost" aria-hidden="true"><svg width="20" height="22" viewBox="0 0 20 22"><path d="M2 1.5v16.5l4.6-4.3 3 6.8 3.2-1.4-3-6.6 6.4-.3z" fill="var(--ink)" stroke="var(--surface)" stroke-width="1.5" stroke-linejoin="round"/></svg></div>
+
+<template id="vizT">
+ <div class="viz" id="viz">
+  <div class="viz-full"><div class="inner"><div class="pad">
+   <div class="vhead">
+    <div><div class="vtitle" id="vtitle">Electricity from the grid, 2026</div><div class="vsub" id="vsub">Hover or drag across the bars</div></div>
+    <div class="vtotal"><b class="num" id="vtotal">4,920 kWh</b><span class="delta num" id="delta"></span></div>
+   </div>
+   <div class="chart" id="chart" tabindex="0" role="group" aria-label="Monthly electricity use. Use left and right arrow keys to read each month.">
+    <svg id="svg" aria-hidden="true"></svg>
+    <div class="tip num" id="tip" role="status"></div>
+   </div>
+   <div class="vfoot">
+    <div class="legend"><span><i class="sw"></i>From the grid</span><span class="sol-l"><i class="sw sol"></i>Covered by solar</span></div>
+    <div class="seg" role="group" aria-label="Scenario"><button type="button" data-s="0" aria-pressed="false">Without solar</button><button type="button" data-s="1" aria-pressed="true">With solar</button></div>
+   </div>
+  </div></div></div>
+  <div class="viz-line"><div class="inner">
+   <button class="line-btn" type="button" id="expand" tabindex="-1">
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M3 15V9M7.5 15V5M12 15v-4M16 15V3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+    <span id="summary"></span><span class="show">Show chart</span>
+   </button>
+  </div></div>
+ </div>
+</template>
+
+<script>
+const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $=s=>document.querySelector(s);
+const NS='http://www.w3.org/2000/svg';
+const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const USE=[560,490,420,340,300,330,420,400,310,360,450,540];
+const SOL=[0,0,0,0,0,190,230,210,150,110,60,45];
+const sum=a=>a.reduce((s,x)=>s+x,0);
+const fmt=n=>Math.round(n).toLocaleString('en-GB');
+const ALL=sum(USE),SAVED=sum(SOL);
+const PCT=Math.round(SAVED/ALL*100);
+
+/* ---------- Chart ---------- */
+let cov=new Array(12).fill(0),grow=1,solar=false,hot=-1,W=600;
+const H=170,PT=18,PB=22,PL=40,MAX=600;
+const y=v=>PT+(1-v/MAX)*(H-PT-PB);
+let svg,bars=[];
+function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);p&&p.append(e);return e}
+function buildChart(){
+ svg=$('#svg');W=svg.clientWidth||600;svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.replaceChildren();
+ el('defs',{},svg).innerHTML=`<pattern id="hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="color-mix(in srgb,var(--ok) 12%,transparent)"/><line x1="0" y1="0" x2="0" y2="5" stroke="var(--ok)" stroke-width="1.4"/></pattern>`;
+ [0,200,400,600].forEach(v=>{el('line',{class:'gl',x1:PL,x2:W,y1:y(v),y2:y(v)},svg);const t=el('text',{class:'yl',x:PL-8,y:y(v)+4,'text-anchor':'end'},svg);t.textContent=v?v:'0'});
+ const bw=(W-PL)/12,narrow=W<420;
+ bars=MON.map((m,i)=>{
+  const g=el('g',{class:'m'},svg),x=PL+i*bw+bw*.17,w=bw*.66;
+  const grid=el('rect',{class:'bar-grid',x,width:w,rx:2.5},g),sol=el('rect',{class:'bar-sol',x:x+.6,width:Math.max(0,w-1.2),rx:2},g);
+  const lab=el('text',{class:'xl',x:x+w/2,y:H-6},svg);lab.textContent=narrow?m[0]:m;
+  return {g,grid,sol,lab,cx:x+w/2};
+ });
+ const mx=PL+5*bw+1;
+ el('line',{class:'mark',x1:mx,x2:mx,y1:PT-12,y2:H-PB},svg);
+ const mt=el('text',{class:'mark-t',x:mx+5,y:PT-3},svg);mt.textContent='Panels on';
+ draw();
+}
+function draw(){
+ bars.forEach((b,i)=>{
+  const u=USE[i]*grow,c=Math.min(cov[i],u),gTop=y(u-c),base=y(0);
+  b.grid.setAttribute('y',gTop);b.grid.setAttribute('height',Math.max(0,base-gTop));
+  b.sol.setAttribute('y',y(u)+.6);b.sol.setAttribute('height',Math.max(0,gTop-y(u)-1.2));
+  b.g.classList.toggle('hot',i===hot);b.lab.classList.toggle('hot',i===hot);
+ });
+ const total=ALL-sum(cov);
+ $('#vtotal').textContent=fmt(total)+' kWh';
+}
+function setHot(i){
+ hot=i;const chart=$('#chart');chart.classList.toggle('scrub',i>=0);draw();
+ const tip=$('#tip');
+ if(i<0){tip.classList.remove('on');return}
+ const b=bars[i],u=USE[i],c=Math.round(cov[i]);
+ tip.innerHTML=c>0?`<b>${MON[i]}</b> · ${fmt(u-c)} kWh from grid · ${fmt(c)} solar`:`<b>${MON[i]}</b> · ${fmt(u)} kWh`;
+ const half=tip.offsetWidth/2,left=Math.max(half,Math.min(W-half,b.cx));
+ tip.style.left=left+'px';tip.style.top=(y(u)+8)+'px';tip.classList.add('on');
+}
+let morphRaf=0;
+function morph(on){
+ solar=on;cancelAnimationFrame(morphRaf);
+ const viz=$('#viz'),chart=$('#chart');
+ viz.classList.add('solar-ever');viz.classList.toggle('solar-on',on);chart.classList.toggle('solar',on);
+ viz.querySelectorAll('.seg button').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.s===+on)));
+ $('#vtitle').textContent=on?'Electricity from the grid, with solar from June':'Electricity from the grid, 2026';
+ const d=$('#delta');d.textContent=`−${fmt(SAVED)} kWh, −${PCT}%`;d.classList.toggle('on',on);
+ const from=cov.slice(),to=on?SOL:new Array(12).fill(0),t0=performance.now(),DUR=620;
+ if(RM){cov=to.slice();draw();if(hot>=0)setHot(hot);return Promise.resolve()}
+ viz.classList.add('live');
+ return new Promise(res=>{
+  const step=t=>{
+   let done=true;
+   cov=from.map((f,i)=>{const k=Math.max(0,i-5),p=Math.min(1,Math.max(0,(t-t0-k*75)/DUR));if(p<1)done=false;const e=1-Math.pow(1-p,4);return f+(to[i]-f)*e});
+   draw();if(hot>=0)setHot(hot);
+   if(!done)morphRaf=requestAnimationFrame(step);else{viz.classList.remove('live');res()}
+  };morphRaf=requestAnimationFrame(step);
+ });
+}
+function growIn(){
+ if(RM){grow=1;draw();return}
+ const t0=performance.now();grow=0;
+ const step=t=>{const p=Math.min(1,(t-t0)/520);grow=1-Math.pow(1-p,3);draw();if(p<1)requestAnimationFrame(step)};requestAnimationFrame(step);
+}
+function setOpen(open){
+ const viz=$('#viz');viz.classList.toggle('closed',!open);
+ $('#expand').tabIndex=open?-1:0;$('#chart').tabIndex=open?0:-1;
+ viz.querySelectorAll('.seg button').forEach(b=>b.tabIndex=open?0:-1);
+ $('#summary').innerHTML=solar?`<b>Energy chart</b> · ${fmt(ALL-SAVED)} kWh from the grid with solar from June, down ${PCT}%`:`<b>Energy chart</b> · ${fmt(ALL)} kWh from the grid in 2026`;
+ if(!open)setHot(-1);
+}
+function wireChart(){
+ const chart=$('#chart');
+ const at=e=>{const r=chart.getBoundingClientRect(),x=e.clientX-r.left;return Math.max(0,Math.min(11,Math.floor((x-PL)/((W-PL)/12))))};
+ chart.addEventListener('pointerdown',e=>{chart.setPointerCapture(e.pointerId);setHot(at(e))});
+ chart.addEventListener('pointermove',e=>{if(e.pointerType==='mouse'||chart.hasPointerCapture(e.pointerId))setHot(at(e))});
+ chart.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse')setHot(-1)});
+ chart.addEventListener('pointerup',e=>{if(e.pointerType!=='mouse')setTimeout(()=>setHot(-1),1200)});
+ chart.addEventListener('keydown',e=>{
+  const k={ArrowRight:1,ArrowLeft:-1}[e.key];
+  if(k){e.preventDefault();setHot(Math.max(0,Math.min(11,(hot<0?(k>0?-1:12):hot)+k)))}
+  if(e.key==='Home'){e.preventDefault();setHot(0)}if(e.key==='End'){e.preventDefault();setHot(11)}
+  if(e.key==='Escape')setHot(-1);
+ });
+ chart.addEventListener('blur',()=>setHot(-1));
+ $('#viz').querySelectorAll('.seg button').forEach(b=>b.addEventListener('click',()=>morph(b.dataset.s==='1')));
+ $('#expand').addEventListener('click',()=>{setOpen(true);setTimeout(()=>$('#viz').scrollIntoView({block:'nearest',behavior:RM?'auto':'smooth'}),200)});
+ new ResizeObserver(()=>{if(Math.abs(svg.clientWidth-W)>1){buildChart();if(hot>=0)setHot(hot)}}).observe(chart);
+}
+
+/* ---------- Conversation ---------- */
+const thread=$('#thread');
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+function scrollEnd(){thread.scrollTo({top:thread.scrollHeight,behavior:RM?'auto':'smooth'})}
+function addMe(text){const d=document.createElement('div');d.className='msg me enter';d.textContent=text;thread.append(d);scrollEnd();return d}
+async function addAi(paras,stream=true){
+ const d=document.createElement('div');d.className='msg ai enter';thread.append(d);
+ const words=[];
+ paras.forEach(([tag,txt])=>{const p=document.createElement(tag);txt.split(' ').forEach((w,i)=>{const s=document.createElement('span');s.className='w'+(stream&&!RM?' pend':'');s.textContent=(i?' ':'')+w;p.append(s);words.push(s)});d.append(p)});
+ scrollEnd();
+ if(stream&&!RM)for(const w of words){w.classList.remove('pend');await wait(22)}
+ return d;
+}
+let busy=false;
+function setChips(list){const c=$('#chips');c.replaceChildren(...list.map(t=>{const b=document.createElement('button');b.type='button';b.className='chip';b.textContent=t;b.addEventListener('click',()=>send(t));return b}))}
+const CHIP_SOLAR='What if we add solar in June?',CHIP_NOTE='Draft a note to the landlord about the boiler';
+async function send(text){
+ text=text.trim();if(!text||busy)return;busy=true;$('#say').value='';setChips([]);
+ addMe(text);await wait(RM?50:380);
+ if(/solar|panel/i.test(text)){
+  if($('#viz').classList.contains('closed'))setOpen(true);
+  setTimeout(()=>$('#viz').scrollIntoView({block:'nearest',behavior:RM?'auto':'smooth'}),60);
+  const p=addAi([['p',`I've switched the chart above to a 4 kW roof array from June. Solar covers ${fmt(SAVED)} kWh, about a third of what you use from June to December, so the year's grid use falls ${PCT}%.`]]);
+  await wait(RM?0:260);await morph(true);await p;scrollEnd();
+  setChips([CHIP_NOTE]);
+ }else if(/chart|energy|usage|electric/i.test(text)){
+  setOpen(true);await addAi([['p','Here it is again, the chart above is open.']]);setChips([CHIP_SOLAR]);
+ }else{
+  setOpen(false);await wait(RM?0:300);
+  if(/landlord|boiler/i.test(text))await addAi([['p','Here is a short draft:'],['blockquote','Hi Marta, the pressure valve on the boiler has been dripping since Tuesday. Could someone take a look this week? Any weekday after 4 pm works for us. Thanks, Sam']]);
+  else await addAi([['p','Noted. I folded the energy chart away to keep the thread short. Ask about it and it comes back.']]);
+  setChips([solar?'Show the energy chart again':CHIP_SOLAR]);
+ }
+ scrollEnd();busy=false;
+}
+$('#composer').addEventListener('submit',e=>{e.preventDefault();send($('#say').value)});
+
+function start(){
+ thread.replaceChildren();cov=new Array(12).fill(0);solar=false;hot=-1;busy=false;
+ addMe('How much electricity did we use this year?').classList.remove('enter');
+ const d=document.createElement('div');d.className='msg ai';
+ d.innerHTML='<p>4,920 kWh in total. Heating drives the winter peaks in December and January; July is the summer high, when the heat pump runs as cooling.</p>';
+ d.append($('#vizT').content.cloneNode(true));thread.append(d);
+ buildChart();wireChart();setOpen(true);growIn();
+ setChips([CHIP_SOLAR]);thread.scrollTop=0;
+}
+start();
+
+/* ---------- Autoplay ---------- */
+const AUTO=new URLSearchParams(location.search).has('autoplay');
+const ghost=$('.ghost');let run=0,auto=false;
+function stop(){if(!auto)return;auto=false;run++;ghost.classList.remove('on')}
+['pointerdown','keydown','wheel','touchstart'].forEach(t=>addEventListener(t,e=>{if(e.isTrusted)stop()},{capture:true,passive:true}));
+function nap(ms){const r=run;return new Promise((ok,no)=>setTimeout(()=>r===run&&auto?ok():no('stop'),ms))}
+function point(x,y,ms){ghost.style.transitionDuration=ms+'ms';ghost.style.transform=`translate(${x}px,${y}px)`;return nap(RM?60:ms)}
+async function glide(node,ax=.5,ay=.5,ms=650){const b=node.getBoundingClientRect();await point(b.left+b.width*ax,b.top+b.height*ay,ms)}
+async function tap(){ghost.classList.remove('tap');void ghost.offsetWidth;ghost.classList.add('tap');await nap(200)}
+async function scrubTo(i,ms){const r=$('#chart').getBoundingClientRect(),b=bars[i];await point(r.left+b.cx,r.top+y(USE[i])+30,ms);setHot(i)}
+async function typeSend(text){
+ const inp=$('#say');await glide(inp,.25,.5,600);await tap();
+ for(const ch of text){inp.value+=ch;await nap(RM?8:30)}
+ await nap(250);await glide($('.send'),.5,.5,350);await tap();send(inp.value);
+}
+async function script(){
+ start();
+ ghost.style.transitionDuration='0ms';ghost.style.transform=`translate(${innerWidth*.7}px,${innerHeight*.8}px)`;
+ await nap(60);ghost.classList.add('on');await nap(500);
+ await scrubTo(0,700);
+ for(let i=1;i<12;i++)await scrubTo(i,RM?20:120);
+ await scrubTo(6,500);await nap(700);setHot(-1);
+ await typeSend(CHIP_SOLAR);
+ await nap(RM?400:2300);
+ await scrubTo(6,700);await nap(1100);await scrubTo(9,450);await nap(700);setHot(-1);
+ await typeSend('Can you draft a note to the landlord about the boiler?');
+ await nap(RM?600:2400);
+}
+async function loop(){auto=true;while(auto){try{await script();await nap(2000)}catch(e){if(e!=='stop')console.error(e);return}}}
+if(AUTO)loop();
+</script>
+</body>
+</html>

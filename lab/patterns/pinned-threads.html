@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pinned Agent Threads</title>
+<link rel="stylesheet" href="../lab.css">
+<style>
+:root{
+ --wren:#0b7a68;--otto:#7448c9;--agent-ink:#fff;
+ --floor:var(--surface);--wall:var(--ink);--fur:color-mix(in oklab,var(--ink) 7%,var(--raised));
+ --fur-line:color-mix(in oklab,var(--ink) 34%,transparent);--rug:#ddd2c1;--glass:#8fb4d9;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--wren:#4fd1b5;--otto:#bba0ff;--agent-ink:#0d0d10;--rug:#3b352d;--glass:#4f7396}}
+:root[data-theme="dark"]{--wren:#4fd1b5;--otto:#bba0ff;--agent-ink:#0d0d10;--rug:#3b352d;--glass:#4f7396}
+::selection{background:color-mix(in oklab,var(--accent) 30%,transparent)}
+.stage{padding:16px;align-content:center}
+@media (max-width:620px){.stage{align-content:start;padding-top:28px}}
+.app{width:min(100%,1040px);display:grid;gap:12px;justify-items:center}
+
+.bar{width:100%;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px}
+.doc{display:flex;flex-direction:column;line-height:1.25}
+.doc strong{font-size:15px;font-weight:650;letter-spacing:-.01em}
+.doc span{font-size:13px;color:var(--muted)}
+.agents{display:flex;gap:6px}
+.agent-chip{display:flex;align-items:center;gap:7px;padding:4px 10px 4px 4px;border-radius:999px;background:var(--raised);box-shadow:0 0 0 1px var(--line);font-size:13px}
+.agent-chip em{font-style:normal;color:var(--muted)}
+.agent-chip[data-busy="true"] em{color:var(--agent)}
+.av{--agent:var(--wren);flex:none;width:22px;height:22px;display:grid;place-items:center;font-size:11px;font-weight:700;color:var(--agent-ink);background:var(--agent);border-radius:50%}
+.av.otto{--agent:var(--otto);border-radius:6px}
+
+.canvas{position:relative;width:min(100%,calc((100dvh - 120px) * 1.6));aspect-ratio:8/5;border-radius:var(--r-md);background:var(--floor);box-shadow:var(--shadow),0 0 0 1px var(--line);overflow:hidden;touch-action:manipulation}
+.canvas>svg{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:crosshair}
+.canvas>svg:focus-visible{outline:none}
+.canvas:has(svg:focus-visible){box-shadow:var(--shadow),0 0 0 2px var(--accent)}
+.fur{transition:transform .42s var(--ease)}
+.fur .body{fill:var(--fur);stroke:var(--fur-line);stroke-width:1.5;transition:fill .35s var(--ease)}
+.fur .detail{fill:none;stroke:var(--fur-line);stroke-width:1.5}
+.fur:focus{outline:none}
+.fur:focus-visible .body{stroke:var(--accent);stroke-width:3}
+.fur.new{animation:grow .38s var(--ease)}
+@keyframes grow{from{opacity:0;transform:var(--t) scale(.6)}}
+.room-label{font-size:13px;fill:var(--muted);letter-spacing:.02em}
+.hl{fill:none;stroke:var(--agent);stroke-width:2.5;stroke-dasharray:6 5;rx:8;pointer-events:none;transition:opacity .5s var(--ease)}
+.hl-tag rect{fill:var(--agent)}
+.hl-tag text{fill:var(--agent-ink);font-size:12px;font-weight:700}
+
+.layer{position:absolute;inset:0;pointer-events:none}
+.pin{position:absolute;pointer-events:auto;width:30px;height:30px;margin:-34px 0 0 -15px;border:0;padding:0;background:none;cursor:pointer;transition:left .42s var(--ease),top .42s var(--ease)}
+.pin .drop{position:absolute;inset:0;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:var(--ink);box-shadow:0 2px 6px rgba(0,0,0,.25)}
+.pin .no{position:relative;color:var(--bg);font-size:13px;font-weight:700;line-height:30px}
+.pin .av{position:absolute;right:-9px;top:-7px;width:18px;height:18px;font-size:10px;box-shadow:0 0 0 2px var(--floor)}
+.pin[data-state="working"] .drop{animation:ring 1.1s var(--ease) infinite}
+@keyframes ring{0%{box-shadow:0 0 0 0 color-mix(in oklab,var(--agent) 55%,transparent)}100%{box-shadow:0 0 0 12px transparent}}
+.pin.landing{animation:land .3s var(--spring)}
+@keyframes land{from{transform:translateY(-10px);opacity:0}}
+.pin[data-state="resolved"]{width:24px;height:24px;margin:-12px 0 0 -12px}
+.pin[data-state="resolved"] .drop{border-radius:50%;transform:none;background:var(--ok)}
+.pin[data-state="resolved"] .no,.pin[data-state="resolved"] .av{display:none}
+.pin .check{display:none;position:relative;color:var(--bg)}
+.pin[data-state="resolved"] .check{display:block;margin:auto}
+.pin:focus-visible{outline-offset:4px;border-radius:50%}
+
+.thread{position:absolute;pointer-events:auto;width:252px;background:var(--raised);border-radius:var(--r-md);box-shadow:var(--shadow),0 0 0 1px var(--line);font-size:14px;line-height:1.4;transform-origin:var(--ox,0) var(--oy,0);animation:pop .26s var(--ease)}
+@keyframes pop{from{opacity:0;transform:scale(.88)}}
+.thread.leaving{animation:shrink .18s var(--exit) forwards}
+@keyframes shrink{to{opacity:0;transform:scale(.6)}}
+.thread header{display:flex;align-items:center;gap:8px;padding:10px 8px 8px 12px;border-bottom:1px solid var(--line)}
+.thread header .no{width:20px;height:20px;border-radius:50%;background:var(--ink);color:var(--bg);font-size:11px;font-weight:700;display:grid;place-items:center}
+.thread header .target{flex:1;font-weight:600}
+.icon-btn{width:32px;height:32px;display:grid;place-items:center;border:0;border-radius:8px;background:none;color:var(--muted);cursor:pointer}
+.icon-btn:hover{background:var(--line);color:var(--ink)}
+.icon-btn.resolve:hover{color:var(--ok)}
+.msgs{list-style:none;margin:0;padding:6px 12px;display:grid;gap:10px;max-height:190px;overflow:auto}
+.msgs:empty{display:none}
+.msg{display:flex;gap:8px;align-items:flex-start}
+.msg .who{display:block;font-size:12px;font-weight:650;color:var(--muted)}
+.msg p{margin:1px 0 0}
+.msg.agent{animation:pop .26s var(--ease)}
+.msg.agent .who{color:var(--agent)}
+.msg.you .yav{flex:none;width:22px;height:22px;border-radius:50%;background:var(--line);display:grid;place-items:center;font-size:10px;font-weight:700;color:var(--muted)}
+.status{display:flex;align-items:center;gap:8px;padding:0 12px 8px;font-size:13px;color:var(--muted)}
+.status:empty{display:none}
+.dots{display:inline-flex;gap:3px}
+.dots i{width:5px;height:5px;border-radius:50%;background:var(--agent);animation:blink 1s infinite}
+.dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}
+@keyframes blink{0%,100%{opacity:.25}50%{opacity:1}}
+.composer{display:grid;gap:8px;padding:8px 12px 12px}
+.pick{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--muted)}
+.pick label{display:flex;align-items:center;gap:6px;padding:3px 9px 3px 3px;border-radius:999px;cursor:pointer;box-shadow:0 0 0 1px var(--line);color:var(--ink)}
+.pick input{position:absolute;opacity:0;pointer-events:none}
+.pick label:has(input:checked){box-shadow:0 0 0 2px var(--agent)}
+.pick label:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+.pick .av{width:18px;height:18px;font-size:10px}
+.row{display:flex;gap:6px;align-items:flex-end}
+.row textarea{flex:1;min-width:0;width:100%;resize:none;min-height:38px;max-height:90px;padding:8px 10px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:14px;line-height:1.35;caret-color:var(--accent)}
+.row textarea::placeholder{color:var(--muted)}
+.row textarea:focus{outline:none;border-color:var(--accent)}
+.send{flex:none;width:38px;height:38px;border:0;border-radius:var(--r-sm);background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;cursor:pointer}
+.send:disabled{opacity:.4;cursor:default}
+
+.dock{width:100%;display:none}
+.dock .thread{position:relative;width:100%;left:auto!important;top:auto!important}
+.dock .hint{margin:4px 0 0;text-align:center;font-size:14px;color:var(--muted)}
+.narrow .dock{display:block}
+
+.ap-cursor{position:fixed;left:0;top:0;z-index:50;pointer-events:none;transition:transform .5s var(--ease)}
+.ap-cursor svg{display:block;filter:drop-shadow(0 2px 3px rgba(0,0,0,.3))}
+.ap-ripple{position:fixed;z-index:49;width:36px;height:36px;margin:-18px 0 0 -18px;border-radius:50%;border:2px solid var(--accent);pointer-events:none;animation:rip .45s var(--ease) forwards}
+@keyframes rip{from{transform:scale(.3);opacity:1}to{transform:scale(1.3);opacity:0}}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+</style>
+</head>
+<body>
+<main class="stage">
+ <div class="app" id="app">
+  <div class="bar">
+   <div class="doc"><strong>Flat 4B, layout draft</strong><span>Click a spot on the plan to pin a request</span></div>
+   <div class="agents" aria-label="Agents">
+    <span class="agent-chip" id="chip-wren" style="--agent:var(--wren)"><span class="av">W</span>Wren <em>idle</em></span>
+    <span class="agent-chip" id="chip-otto" style="--agent:var(--otto)"><span class="av otto">O</span>Otto <em>idle</em></span>
+   </div>
+  </div>
+  <div class="canvas" id="canvas">
+   <svg id="plan" viewBox="0 0 800 500" tabindex="0" role="application" aria-label="Floor plan. Tab to a piece of furniture and press Enter to pin a request to it, or press Enter here to pin the centre of the plan.">
+    <defs>
+     <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="var(--line)"/></pattern>
+    </defs>
+    <rect x="20" y="20" width="760" height="460" fill="url(#grid)"/>
+    <g id="furniture"></g>
+    <g fill="none" stroke="var(--wall)" stroke-width="6" stroke-linecap="square">
+     <rect x="20" y="20" width="760" height="460"/>
+     <path d="M470 20V120M470 180V300M470 360V480M470 230H780"/>
+    </g>
+    <g stroke="var(--glass)" stroke-width="6"><path d="M120 20H360M560 20H700M780 300V420"/></g>
+    <g stroke="var(--floor)" stroke-width="2"><path d="M120 20H360M560 20H700M780 300V420"/></g>
+    <text class="room-label" x="36" y="462">Living</text>
+    <text class="room-label" x="486" y="214">Kitchen</text>
+    <text class="room-label" x="486" y="254">Bedroom</text>
+    <g id="marks"></g>
+   </svg>
+   <div class="layer" id="layer"></div>
+  </div>
+  <div class="dock" id="dock" aria-live="polite"><p class="hint">Tap the plan to drop a pin and ask an agent.</p></div>
+  <p class="sr" aria-live="polite" id="live"></p>
+ </div>
+</main>
+<script>
+(() => {
+'use strict';
+const NS = 'http://www.w3.org/2000/svg';
+const $ = s => document.querySelector(s);
+const rm = matchMedia('(prefers-reduced-motion: reduce)');
+const canvas = $('#canvas'), plan = $('#plan'), furn = $('#furniture'), marks = $('#marks'), layer = $('#layer'), dock = $('#dock'), app = $('#app');
+
+const AGENTS = {
+ wren: {name: 'Wren', initial: 'W', cls: '', color: 'var(--wren)'},
+ otto: {name: 'Otto', initial: 'O', cls: 'otto', color: 'var(--otto)'}
+};
+const COLOURS = [
+ [/terracotta|warmer|warm|red|rust/, 'terracotta', '#c4673f'],
+ [/sage|green|olive/, 'sage green', '#7f9c7a'],
+ [/blue|cooler|cool|slate/, 'slate blue', '#5b77a8'],
+ [/ochre|yellow|mustard|gold/, 'ochre', '#c99a2e'],
+ [/charcoal|darker|dark|grey|gray|black/, 'charcoal', '#4a4a52'],
+ [/cream|lighter|light|white|beige/, 'cream', '#e6dcc6']
+];
+const START = [
+ {id:'rug', name:'Rug', kind:'rug', x:90, y:170, w:250, h:170},
+ {id:'table', name:'Coffee table', kind:'table', x:160, y:225, w:110, h:60},
+ {id:'sofa', name:'Sofa', kind:'sofa', x:110, y:362, w:210, h:72},
+ {id:'chair', name:'Armchair', kind:'chair', x:368, y:206, w:68, h:68},
+ {id:'plant', name:'Plant', kind:'plant', x:404, y:40, w:44, h:44},
+ {id:'counter', name:'Kitchen counter', kind:'counter', x:490, y:30, w:272, h:50},
+ {id:'island', name:'Island', kind:'table', x:560, y:122, w:140, h:56},
+ {id:'bed', name:'Bed', kind:'bed', x:612, y:276, w:158, h:180},
+ {id:'stand', name:'Bedside table', kind:'table', x:726, y:238, w:44, h:30},
+ {id:'wardrobe', name:'Wardrobe', kind:'counter', x:486, y:420, w:110, h:48}
+];
+const ADDABLE = {lamp:['Floor lamp','lamp',30], plant:['Plant','plant',40], chair:['Chair','chair',56], shelf:['Shelf','counter',70], 'side table':['Side table','table',40], rug:['Rug','rug',90]};
+
+let shapes, pins, seq, timers = new Set(), active = null;
+const later = (fn, ms) => { const t = setTimeout(() => { timers.delete(t); fn(); }, ms); timers.add(t); return t; };
+
+function el(tag, attrs, parent){ const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); parent && parent.append(n); return n; }
+
+function draw(s){
+ const g = s.g || el('g', {class:'fur', tabindex:'0', role:'button', 'data-id':s.id}, furn);
+ s.g = g; g.replaceChildren();
+ g.setAttribute('aria-label', s.name + '. Press Enter to pin a request.');
+ el('title', {}, g).textContent = s.name;
+ const {w, h, kind} = s, body = {class:'body'};
+ if (kind === 'rug') { const r = el('rect', {...body, width:w, height:h, rx:10}, g); r.style.fill = s.fill || 'var(--rug)'; el('rect', {class:'detail', x:10, y:10, width:w-20, height:h-20, rx:6, 'stroke-dasharray':'2 5'}, g); }
+ else if (kind === 'sofa') { el('rect', {...body, width:w, height:h, rx:12}, g); el('path', {class:'detail', d:`M14 ${h-20}H${w-14}M14 4V${h-20}M${w-14} 4V${h-20}M${w/2} 4V${h-20}`}, g); }
+ else if (kind === 'chair') { el('rect', {...body, width:w, height:h, rx:12}, g); el('path', {class:'detail', d:`M12 ${h-14}V12H${w-12}V${h-14}`}, g); }
+ else if (kind === 'plant') { el('circle', {...body, cx:w/2, cy:h/2, r:w/2}, g); el('path', {class:'detail', d:`M${w/2} 6V${h-6}M6 ${h/2}H${w-6}M10 10L${w-10} ${h-10}M${w-10} 10L10 ${h-10}`}, g); }
+ else if (kind === 'lamp') { el('circle', {...body, cx:w/2, cy:h/2, r:w/2}, g); el('circle', {cx:w/2, cy:h/2, r:5, fill:'var(--warn)'}, g); }
+ else if (kind === 'bed') { el('rect', {...body, width:w, height:h, rx:8}, g); el('rect', {class:'detail', x:w-40, y:12, width:28, height:h/2-18, rx:6}, g); el('rect', {class:'detail', x:w-40, y:h/2+6, width:28, height:h/2-18, rx:6}, g); el('path', {class:'detail', d:`M${w*0.42} 0V${h}`}, g); }
+ else { el('rect', {...body, width:w, height:h, rx: kind === 'table' ? 8 : 4}, g); if (kind === 'counter') el('path', {class:'detail', d:`M0 ${h-10}H${w}`}, g); }
+ if (s.fill && kind !== 'rug') g.querySelector('.body').style.fill = s.fill;
+ place(s);
+}
+function place(s){ const t = `translate(${s.x}px,${s.y}px)`; s.g.style.transform = t; s.g.style.setProperty('--t', t); }
+
+function reset(){
+ timers.forEach(clearTimeout); timers.clear();
+ furn.replaceChildren(); marks.replaceChildren(); layer.replaceChildren();
+ dock.querySelectorAll('.thread').forEach(n => n.remove());
+ shapes = new Map(START.map(s => [s.id, {...s}])); shapes.forEach(draw);
+ pins = []; seq = 0; active = null;
+ setBusy('wren', false); setBusy('otto', false); layout();
+}
+
+const toSvg = (cx, cy) => { const r = canvas.getBoundingClientRect(); return {x:(cx - r.left) / r.width * 800, y:(cy - r.top) / r.height * 500}; };
+const toClient = (x, y) => { const r = canvas.getBoundingClientRect(); return {x:r.left + x / 800 * r.width, y:r.top + y / 500 * r.height}; };
+const shapeAt = (x, y) => [...shapes.values()].reverse().find(s => x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h && s.kind !== 'rug') || [...shapes.values()].find(s => s.kind === 'rug' && x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h);
+const pinPos = p => { const s = p.shapeId && shapes.get(p.shapeId); return s ? {x:s.x + p.dx, y:s.y + p.dy} : {x:p.x, y:p.y}; };
+const isNarrow = () => canvas.getBoundingClientRect().width < 620;
+
+/* ---------- pins and threads ---------- */
+function freeAgent(){ const busy = a => pins.some(p => p.agent === a && p.state === 'working'); return busy('wren') && !busy('otto') ? 'otto' : 'wren'; }
+
+function dropPin(x, y, shape){
+ pins.filter(p => p.state === 'draft').forEach(removePin);
+ const p = {n: ++seq, state:'draft', agent:freeAgent(), x, y};
+ if (shape) { p.shapeId = shape.id; p.dx = x - shape.x; p.dy = y - shape.y; }
+ p.target = shape ? shape.name : 'This spot';
+ p.ref = shape ? 'the ' + shape.name.toLowerCase() : 'this spot';
+ p.btn = document.createElement('button');
+ p.btn.className = 'pin landing';
+ p.btn.innerHTML = `<span class="drop"></span><span class="no">${p.n}</span><svg class="check" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7.5l2.6 2.6L11 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+ p.btn.addEventListener('click', e => { e.stopPropagation(); openThread(p, true); });
+ layer.append(p.btn);
+ p.card = buildCard(p);
+ pins.push(p); refreshPin(p); openThread(p, true);
+ return p;
+}
+
+function buildCard(p){
+ const c = document.createElement('section');
+ c.className = 'thread'; c.setAttribute('aria-label', `Thread ${p.n} on ${p.target}`);
+ c.innerHTML = `<header><span class="no">${p.n}</span><span class="target">${p.target}</span>
+  <button class="icon-btn resolve" type="button" aria-label="Resolve thread" title="Resolve"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-6.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  <button class="icon-btn close" type="button" aria-label="Close thread" title="Close"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></header>
+  <ol class="msgs"></ol><div class="status"></div>
+  <form class="composer"><div class="pick" role="radiogroup" aria-label="Ask agent">Ask
+   ${Object.entries(AGENTS).map(([k, a]) => `<label style="--agent:${a.color}"><input type="radio" name="ag${p.n}" value="${k}" ${p.agent === k ? 'checked' : ''}><span class="av ${a.cls}">${a.initial}</span>${a.name}</label>`).join('')}</div>
+   <div class="row"><textarea rows="1" placeholder="Ask about ${p.ref}…" aria-label="Request"></textarea>
+   <button class="send" type="submit" aria-label="Send" disabled><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13V3M3.5 7.5L8 3l4.5 4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></form>`;
+ const ta = c.querySelector('textarea'), send = c.querySelector('.send');
+ ta.addEventListener('input', () => { send.disabled = !ta.value.trim(); ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight + 2, 90) + 'px'; });
+ ta.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); c.querySelector('form').requestSubmit(); } });
+ c.querySelector('form').addEventListener('submit', e => { e.preventDefault(); submit(p); });
+ c.querySelectorAll('input[type=radio]').forEach(r => r.addEventListener('change', () => { p.agent = r.value; refreshPin(p); }));
+ c.querySelector('.resolve').addEventListener('click', () => resolve(p));
+ c.querySelector('.close').addEventListener('click', () => closeThread(p, true));
+ c.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); closeThread(p, true); } });
+ c.addEventListener('pointerdown', e => e.stopPropagation());
+ c.addEventListener('click', e => e.stopPropagation());
+ return c;
+}
+
+function refreshPin(p){
+ const a = AGENTS[p.agent];
+ p.btn.dataset.state = p.state;
+ p.btn.style.setProperty('--agent', a.color);
+ p.card.style.setProperty('--agent', a.color);
+ let av = p.btn.querySelector('.av');
+ if (p.state !== 'draft') { if (!av) { av = document.createElement('span'); p.btn.append(av); } av.className = 'av ' + a.cls; av.textContent = a.initial; }
+ const label = p.state === 'resolved' ? `Resolved thread ${p.n} on ${p.target}. Press to reopen.` : `Thread ${p.n} on ${p.target}${p.state === 'working' ? ', ' + a.name + ' is working' : ''}`;
+ p.btn.setAttribute('aria-label', label);
+ const pos = pinPos(p); p.btn.style.left = pos.x / 8 + '%'; p.btn.style.top = pos.y / 5 + '%';
+}
+
+function openThread(p, focus){
+ if (p.state === 'resolved') { p.state = p.agent && p.card.querySelector('.msg') ? 'done' : 'draft'; refreshPin(p); }
+ p.open = true; active = p;
+ if (isNarrow()) pins.forEach(o => { if (o !== p) o.open = false; });
+ layout();
+ if (focus) { const ta = p.card.querySelector('textarea'); (ta || p.card.querySelector('button')).focus({preventScroll:true}); }
+}
+function closeThread(p, restoreFocus){
+ if (p.state === 'draft' && !p.card.querySelector('textarea').value.trim()) { removePin(p); plan.focus({preventScroll:true}); return; }
+ p.open = false; if (active === p) active = null;
+ hideCard(p, () => { layout(); if (restoreFocus) p.btn.focus({preventScroll:true}); });
+}
+function hideCard(p, then){
+ if (!p.card.isConnected || rm.matches) { p.card.remove(); then && then(); return; }
+ p.card.classList.add('leaving');
+ setTimeout(() => { p.card.classList.remove('leaving'); p.card.remove(); then && then(); }, 180);
+}
+function removePin(p){ p.card.remove(); p.btn.remove(); pins = pins.filter(o => o !== p); if (active === p) active = null; layout(); }
+function resolve(p){
+ p.state = 'resolved'; p.open = false; if (active === p) active = null;
+ refreshPin(p); announce(`Thread ${p.n} resolved.`);
+ hideCard(p, () => { layout(); p.btn.focus({preventScroll:true}); });
+}
+
+function layout(){
+ const narrow = isNarrow();
+ app.classList.toggle('narrow', narrow);
+ pins.forEach(refreshPin);
+ dock.querySelector('.hint').hidden = pins.some(p => p.open);
+ if (narrow) {
+  pins.forEach(p => { if (p.card.classList.contains('leaving')) return; if (p.open && p === active) { if (p.card.parentNode !== dock) dock.append(p.card); } else p.card.remove(); });
+  return;
+ }
+ const r = canvas.getBoundingClientRect(), placed = [], M = 10;
+ const clampX = v => Math.max(M, Math.min(v, r.width - M - 252)), clampY = (v, h) => Math.max(M, Math.min(v, r.height - h - M));
+ pins.forEach(p => {
+  if (!p.open) { if (!p.card.classList.contains('leaving')) p.card.remove(); return; }
+  if (p.card.parentNode !== layer) layer.append(p.card);
+  const pos = pinPos(p), px = pos.x / 800 * r.width, py = pos.y / 500 * r.height, cw = p.card.offsetWidth, ch = p.card.offsetHeight;
+  // Try beside, then above or below the pin; keep the spot that covers the fewest other cards and the pin itself.
+  const options = [
+   {left:px + 22, top:clampY(py - 40, ch), fits:px + 22 + cw <= r.width - M},
+   {left:px - 22 - cw, top:clampY(py - 40, ch), fits:px - 22 - cw >= M},
+   {left:clampX(px - cw / 2), top:py - 44 - ch, fits:py - 44 - ch >= M},
+   {left:clampX(px - cw / 2), top:py + 12, fits:py + 12 + ch <= r.height - M}
+  ].map((o, i) => ({...o, i})).filter(o => o.fits);
+  if (!options.length) options.push({left:clampX(px + 22), top:clampY(py - 40, ch), i:0});
+  const cost = o => placed.reduce((sum, q) => sum + Math.max(0, Math.min(o.left + cw, q.left + q.w) - Math.max(o.left, q.left)) * Math.max(0, Math.min(o.top + ch, q.top + q.h) - Math.max(o.top, q.top)), 0)
+   + pins.reduce((sum, q) => { const c = pinPos(q), x = c.x / 800 * r.width, y = c.y / 500 * r.height; return sum + (x > o.left - 14 && x < o.left + cw + 14 && y > o.top && y < o.top + ch + 34 ? 4000 : 0); }, 0);
+  const prev = options.find(o => o.i === p.side);
+  let best = options.reduce((a, b) => cost(b) < cost(a) ? b : a);
+  if (prev && cost(prev) <= cost(best)) best = prev;
+  p.side = best.i;
+  placed.push({left:best.left, top:best.top, w:cw, h:ch});
+  p.card.style.left = best.left + 'px'; p.card.style.top = best.top + 'px';
+  p.card.style.setProperty('--ox', (px - best.left) + 'px'); p.card.style.setProperty('--oy', (py - best.top) + 'px');
+ });
+}
+
+/* ---------- the agent ---------- */
+function addMsg(p, who, text){
+ const li = document.createElement('li');
+ if (who === 'you') li.className = 'msg you', li.innerHTML = `<span class="yav">You</span><div><span class="who">You</span><p></p></div>`;
+ else { const a = AGENTS[who]; li.className = 'msg agent'; li.innerHTML = `<span class="av ${a.cls}">${a.initial}</span><div><span class="who">${a.name}</span><p></p></div>`; }
+ li.querySelector('p').textContent = text;
+ const list = p.card.querySelector('.msgs'); list.append(li); list.scrollTop = list.scrollHeight;
+ layout();
+}
+function setStatus(p, html){ p.card.querySelector('.status').innerHTML = html; layout(); }
+function setBusy(agent, busy){ const c = $('#chip-' + agent); c.dataset.busy = busy; c.querySelector('em').textContent = busy ? 'working' : 'idle'; }
+
+function submit(p){
+ const ta = p.card.querySelector('textarea'), text = ta.value.trim();
+ if (!text || p.state === 'working') return;
+ ta.value = ''; ta.dispatchEvent(new Event('input'));
+ const first = p.state === 'draft';
+ p.state = 'working'; refreshPin(p);
+ if (first) { p.card.querySelector('.pick').remove(); ta.placeholder = 'Reply…'; }
+ addMsg(p, 'you', text);
+ const a = AGENTS[p.agent], agent = p.agent;
+ setBusy(agent, true);
+ setStatus(p, `<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>${a.name} is looking at ${p.ref}`);
+ later(() => {
+  const reply = act(p, text);
+  p.state = 'done'; setStatus(p, ''); refreshPin(p);
+  addMsg(p, agent, reply);
+  announce(`${a.name} replied on thread ${p.n}: ${reply}`);
+  if (!pins.some(o => o.agent === agent && o.state === 'working')) setBusy(agent, false);
+ }, rm.matches ? 900 : 2200);
+}
+
+function act(p, text){
+ const t = text.toLowerCase(), pos = pinPos(p);
+ const s = p.shapeId && shapes.get(p.shapeId);
+ const name = s ? s.name.toLowerCase() : null;
+ const addNoun = /\b(add|put|place|bring|need)\b/.test(t) && (Object.keys(ADDABLE).find(k => t.includes(k)) || 'side table');
+ if (addNoun) {
+  const [label, kind, size] = ADDABLE[addNoun];
+  const x = Math.round(Math.max(26, Math.min(774 - size, pos.x - size / 2))), y = Math.round(Math.max(26, Math.min(474 - size, pos.y - size / 2)));
+  const ns = {id:'add' + Date.now(), name:label, kind, x, y, w:size, h:size};
+  shapes.set(ns.id, ns); draw(ns); ns.g.classList.add('new');
+  if (!s) { p.shapeId = ns.id; p.dx = pos.x - x; p.dy = pos.y - y; }
+  highlight(ns, p.agent);
+  const near = nearest(ns);
+  return `Added a ${label.toLowerCase()} ${near ? 'beside the ' + near.name.toLowerCase() : 'here'}.`;
+ }
+ const col = COLOURS.find(([re]) => re.test(t));
+ if (col || /colou?r|paint/.test(t)) {
+  if (!s) return `There's nothing under this pin to recolour. Drop the pin on a piece of furniture, or ask me to add something here.`;
+  const [, cname, hex] = col || COLOURS[0];
+  s.fill = hex; draw(s); highlight(s, p.agent);
+  return `Recoloured the ${name} ${cname}.`;
+ }
+ const dir = ['left', 'right', 'up', 'down'].find(d => t.includes(d)) || (/\bwall\b|closer|move|shift|slide|push|nudge/.test(t) ? 'wall' : null);
+ if (dir) {
+  if (!s) return `There's nothing under this pin to move. Drop the pin on a piece of furniture, or ask me to add something here.`;
+  const cm = +(t.match(/(\d+)\s*cm/) || [])[1] || 60;
+  const room = s.x < 470 ? {l:26, r:467, t:26, b:474} : s.y < 230 ? {l:476, r:774, t:26, b:227} : {l:476, r:774, t:236, b:474};
+  const gaps = {left:s.x - room.l, right:room.r - s.x - s.w, up:s.y - room.t, down:room.b - s.y - s.h};
+  let d = dir === 'wall' ? Object.keys(gaps).reduce((a, b) => gaps[a] <= gaps[b] ? a : b) : dir;
+  const toWall = dir === 'wall' || /wall/.test(t);
+  const amount = Math.max(0, Math.min(toWall ? gaps[d] : cm, gaps[d]));
+  if (amount < 2) return `The ${name} is already against the ${wallName(d)} wall. Want it moved somewhere else?`;
+  if (d === 'left') s.x -= amount; if (d === 'right') s.x += amount; if (d === 'up') s.y -= amount; if (d === 'down') s.y += amount;
+  place(s); pins.forEach(refreshPin); layout(); highlight(s, p.agent);
+  return `Moved the ${name} ${Math.round(amount)} cm ${d}${toWall || amount === gaps[d] ? ', against the ' + wallName(d) + ' wall' : ''}.`;
+ }
+ return s ? `This pin is on the ${name}. I can move it, recolour it, or add something beside it. Which would you like?` : `I can add something at this spot, like a lamp, plant or chair. What should go here?`;
+}
+const wallName = d => ({left:'west', right:'east', up:'north', down:'south'})[d];
+function nearest(n){
+ let best = null, bd = 90;
+ shapes.forEach(s => { if (s === n || s.kind === 'rug') return; const dx = Math.max(s.x - (n.x + n.w), n.x - (s.x + s.w), 0), dy = Math.max(s.y - (n.y + n.h), n.y - (s.y + s.h), 0), d = Math.hypot(dx, dy); if (d < bd) { bd = d; best = s; } });
+ return best;
+}
+function highlight(s, agent){
+ const a = AGENTS[agent];
+ later(() => {
+  const g = el('g', {}, marks); g.style.setProperty('--agent', a.color);
+  const pad = 7, r = el('rect', {class:'hl', x:s.x - pad, y:s.y - pad, width:s.w + pad * 2, height:s.h + pad * 2}, g);
+  const tag = el('g', {class:'hl-tag', transform:`translate(${s.x - pad},${Math.max(4, s.y - pad - 22)})`}, g);
+  el('rect', {width:46, height:19, rx:5}, tag); el('text', {x:8, y:14}, tag).textContent = a.name;
+  later(() => { g.style.transition = 'opacity .5s'; g.style.opacity = 0; later(() => g.remove(), 520); }, 1500);
+ }, rm.matches ? 0 : 380);
+}
+const announce = msg => { $('#live').textContent = msg; };
+
+/* ---------- input ---------- */
+plan.addEventListener('click', e => {
+ const {x, y} = toSvg(e.clientX, e.clientY);
+ if (x < 20 || x > 780 || y < 20 || y > 480) return;
+ const g = e.target.closest('.fur'), s = g ? shapes.get(g.dataset.id) : shapeAt(x, y);
+ dropPin(x, y, s);
+});
+plan.addEventListener('keydown', e => {
+ if (e.key !== 'Enter' && e.key !== ' ') return;
+ e.preventDefault();
+ const g = e.target.closest('.fur');
+ if (g) { const s = shapes.get(g.dataset.id); dropPin(s.x + s.w / 2, s.y + s.h / 2, s); }
+ else dropPin(400, 250, shapeAt(400, 250));
+});
+addEventListener('keydown', e => { if (e.key === 'Escape' && active) closeThread(active, true); });
+new ResizeObserver(() => layout()).observe(canvas);
+
+reset();
+
+/* ---------- autoplay ---------- */
+const STOP = Symbol('stop');
+let auto = new URLSearchParams(location.search).has('autoplay'), gen = 0, cur;
+const sleep = ms => new Promise((res, rej) => { const g = gen; setTimeout(() => g === gen && auto ? res() : rej(STOP), ms); });
+function stopAuto(e){ if (!e.isTrusted || !auto) return; auto = false; gen++; cur && cur.remove(); }
+['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(t => addEventListener(t, stopAuto, {capture:true, passive:true}));
+async function moveTo(x, y){
+ const from = cur._p || {x:innerWidth * .7, y:innerHeight * .9}, d = Math.hypot(x - from.x, y - from.y);
+ const ms = rm.matches ? 0 : Math.min(750, 260 + d * .9);
+ cur.style.transitionDuration = ms + 'ms'; cur.style.transform = `translate(${x}px,${y}px)`; cur._p = {x, y};
+ await sleep(ms + 80);
+}
+async function tap(x, y, fn){
+ await moveTo(x, y);
+ const r = document.createElement('div'); r.className = 'ap-ripple'; r.style.left = x + 'px'; r.style.top = y + 'px'; document.body.append(r); setTimeout(() => r.remove(), 500);
+ await sleep(110); fn();
+}
+const centre = n => { const r = n.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+async function tapEl(n){ const [x, y] = centre(n); await tap(x, y, () => n.click()); }
+async function type(p, text){
+ const ta = p.card.querySelector('textarea');
+ await tapEl(ta); ta.focus({preventScroll:true});
+ for (const ch of text) { ta.value += ch; ta.dispatchEvent(new Event('input')); await sleep(38); }
+ await sleep(250);
+}
+async function pinAt(x, y){
+ const c = toClient(x, y); let p;
+ await tap(c.x, c.y, () => { p = dropPin(x, y, shapeAt(x, y)); });
+ await sleep(350); return p;
+}
+async function demo(){
+ await sleep(700);
+ const p1 = await pinAt(160, 398);
+ await type(p1, 'Slide this left, against the wall');
+ await tapEl(p1.card.querySelector('.send'));
+ await sleep(500);
+ const p2 = await pinAt(590, 300);
+ await type(p2, 'Add a reading lamp here');
+ await tapEl(p2.card.querySelector('.send'));
+ while (pins.some(p => p.state === 'working')) await sleep(150);
+ await sleep(1700);
+ if (isNarrow()) { await tapEl(p1.btn); await sleep(900); }
+ await tapEl(p1.card.querySelector('.resolve'));
+ await sleep(600);
+ if (isNarrow()) { await tapEl(p2.btn); await sleep(700); }
+ await tapEl(p2.card.querySelector('.resolve'));
+ await sleep(1300);
+}
+async function run(){
+ cur = document.createElement('div'); cur.className = 'ap-cursor'; cur.setAttribute('aria-hidden', 'true');
+ cur.innerHTML = '<svg width="22" height="26" viewBox="0 0 22 26"><path d="M2 2l17 11.5-7.4 1.3L16 23l-3.6 1.6-4.3-8.3L2 21z" fill="var(--ink)" stroke="var(--bg)" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+ document.body.append(cur);
+ cur.style.transitionDuration = '0ms'; cur.style.transform = `translate(${innerWidth * .7}px,${innerHeight * .9}px)`;
+ while (auto) {
+  try { await demo(); await sleep(2000); reset(); document.activeElement && document.activeElement.blur(); }
+  catch (e) { if (e !== STOP) throw e; }
+ }
+}
+if (auto) run();
+})();
+</script>
+</body>
+</html>

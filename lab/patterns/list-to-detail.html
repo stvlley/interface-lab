@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>List to Detail</title>
+<link rel="stylesheet" href="../lab.css">
+<style>
+:root{--art-l:84%;--art-s:30%;--line-l:36%;--line-s:34%}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--art-l:21%;--art-s:22%;--line-l:62%;--line-s:36%}}
+:root[data-theme="dark"]{--art-l:21%;--art-s:22%;--line-l:62%;--line-s:36%}
+::selection{background:color-mix(in oklab,var(--accent) 30%,transparent)}
+body{overflow-x:clip}
+.stage{padding:16px;align-content:start}
+@media (min-height:560px){.stage{align-content:center}}
+.view{width:min(100%,960px,calc((100dvh - 214px) / 1.25 * 3 + 28px));margin-inline:auto}
+.view[hidden]{display:none}
+.head{margin-bottom:14px}
+.head h1{margin:0;font-size:22px;line-height:1.2;letter-spacing:-.02em;font-weight:680}
+.head p{margin:2px 0 0;font-size:14px;color:var(--muted)}
+.grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.card{display:block;width:100%;padding:0;border:0;background:none;text-align:left;cursor:pointer;border-radius:var(--r-md);transition:transform .15s var(--ease)}
+.card:active{transform:scale(.98)}
+.card:focus-visible{outline-offset:4px}
+.card .art{border-radius:var(--r-md);box-shadow:0 0 0 1px var(--line);transition:box-shadow .2s var(--ease)}
+.card:hover .art{box-shadow:0 0 0 1px var(--line),var(--shadow)}
+.card .t{display:inline-block;margin:8px 2px 0;font-size:15px;font-weight:650;letter-spacing:-.01em;line-height:1.25}
+.card .m{display:block;margin:1px 2px 0;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+
+.art{--h:140;position:relative;aspect-ratio:16/10;overflow:hidden;background:hsl(var(--h) var(--art-s) var(--art-l))}
+.art svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.art path{fill:none;stroke:hsl(var(--h) var(--line-s) var(--line-l));stroke-width:.7;vector-effect:non-scaling-stroke}
+.art path.major{stroke-width:1.4}
+.art circle{fill:hsl(var(--h) var(--line-s) var(--line-l))}
+
+.back{display:inline-flex;align-items:center;gap:6px;margin:0 0 14px -4px;padding:0 14px 0 10px}
+.back:hover{background:color-mix(in oklab,var(--ink) 14%,transparent)}
+.dgrid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:24px;align-items:start}
+.hero{border-radius:var(--r-lg);box-shadow:0 0 0 1px var(--line)}
+.dtext h2{display:inline-block;margin:0;font-size:30px;line-height:1.12;letter-spacing:-.025em;font-weight:700;text-wrap:balance}
+.dtext h2:focus{outline:none}
+.meta{margin:6px 0 0;font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.summary{margin:12px 0 0;font-size:15px;line-height:1.5;max-width:60ch}
+.dtext h3{margin:18px 0 6px;font-size:13px;font-weight:650;color:var(--muted)}
+.entries{list-style:none;margin:0;padding:0;display:grid}
+.entries li{display:grid;grid-template-columns:52px 1fr;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:14px;line-height:1.4}
+.entries time{color:var(--muted);font-variant-numeric:tabular-nums}
+.reveal{animation:fadein .26s var(--ease) .12s both}
+@keyframes fadein{from{opacity:0;transform:translateY(6px)}}
+
+::view-transition-group(thumb),::view-transition-group(title){animation-duration:.42s;animation-timing-function:cubic-bezier(.16,1,.3,1)}
+::view-transition-old(root),::view-transition-new(root){animation-duration:.2s}
+::view-transition-old(title),::view-transition-new(title){height:100%;width:auto;object-fit:none;object-position:left top}
+
+@media (max-width:640px){
+ .grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+ .dgrid{grid-template-columns:1fr;gap:16px}
+ .dtext h2{font-size:26px}
+ .card .t{font-size:14px}
+}
+.ap-cursor{position:fixed;left:0;top:0;z-index:50;pointer-events:none;transition:transform .5s var(--ease)}
+.ap-cursor svg{display:block;filter:drop-shadow(0 2px 3px rgba(0,0,0,.3))}
+.ap-ripple{position:fixed;z-index:49;width:36px;height:36px;margin:-18px 0 0 -18px;border-radius:50%;border:2px solid var(--accent);pointer-events:none;animation:rip .45s var(--ease) forwards}
+@keyframes rip{from{transform:scale(.3);opacity:1}to{transform:scale(1.3);opacity:0}}
+.ap-key{position:fixed;left:50%;bottom:24px;z-index:50;transform:translateX(-50%);padding:6px 12px;border-radius:8px;background:var(--raised);box-shadow:var(--shadow),inset 0 -2px 0 var(--line),0 0 0 1px var(--line);font-size:14px;font-weight:650;pointer-events:none;animation:keyin .2s var(--ease)}
+@keyframes keyin{from{opacity:0;transform:translate(-50%,6px)}}
+</style>
+</head>
+<body>
+<main class="stage">
+ <section class="view" id="list" aria-labelledby="ltitle">
+  <div class="head"><h1 id="ltitle">Field notebooks</h1><p>Autumn survey, six sites. Open one to read its entries.</p></div>
+  <ul class="grid" id="grid"></ul>
+ </section>
+ <section class="view" id="detail" aria-labelledby="dtitle" hidden>
+  <button class="pill back" id="back" type="button"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5L5.5 8l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>All notebooks</button>
+  <div class="dgrid">
+   <div class="art hero" id="hero"></div>
+   <div class="dtext">
+    <h2 id="dtitle" tabindex="-1"></h2>
+    <p class="meta" id="dmeta"></p>
+    <div class="reveal" id="dbody"></div>
+   </div>
+  </div>
+ </section>
+</main>
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const rm = matchMedia('(prefers-reduced-motion: reduce)');
+const params = new URLSearchParams(location.search);
+const canVT = 'startViewTransition' in document && !params.has('flip');
+
+const BOOKS = [
+ {title:'Salt marsh', h:150, seed:3, n:14, dates:'3–29 Oct', by:'Ines Marlow',
+  summary:'Tidal creeks on the north shore, walked at low water twice a week. Waders, samphire, and the slow collapse of the old sea wall.',
+  entries:[['29 Oct','Redshank roosting on the creek edge at high tide, at least forty on the far bank.'],['21 Oct','Sea wall breach has widened by about a metre since the spring tide.'],['14 Oct','First brent geese of the season, a family group of six.']]},
+ {title:'Upper beech wood', h:38, seed:11, n:22, dates:'1–30 Oct', by:'Tomas Reyes',
+  summary:'Old beech and holly on the steep slope above the lane. Fungi counts after rain, and a watch on the badger sett.',
+  entries:[['30 Oct','Porcelain fungus on a fallen limb near the stile, fresh after two wet days.'],['24 Oct','Sett entrance three shows new spoil; bedding dragged in overnight.'],['17 Oct','Nuthatch calling from the same oak three mornings running.']]},
+ {title:'Quarry pond', h:205, seed:7, n:9, dates:'6–27 Oct', by:'Ines Marlow',
+  summary:'A flooded limestone quarry with a reed fringe. Dragonfly counts winding down; winter ducks arriving.',
+  entries:[['27 Oct','Six little grebes on open water, keeping to the deep end.'],['19 Oct','Last common darter of the year, basking on the warm rock face.'],['6 Oct','Reed cut on the east margin; water level down about 20 cm.']]},
+ {title:'Chalk downs', h:88, seed:19, n:17, dates:'2–31 Oct', by:'Priya Nand',
+  summary:'Sheep-grazed grassland on the ridge path. Late flowers, ant hills, and the skylarks that never quite stop.',
+  entries:[['31 Oct','Autumn gentian still in flower on the south-facing bank.'],['22 Oct','Fieldfares in the hawthorns, the first big flock moving through.'],['9 Oct','Counted 112 yellow meadow ant hills in the fenced plot.']]},
+ {title:'Estuary mudflats', h:22, seed:5, n:11, dates:'4–28 Oct', by:'Tomas Reyes',
+  summary:'The wide flats below the harbour, counted from the hide on a rising tide. Big numbers, short windows.',
+  entries:[['28 Oct','Roughly 900 dunlin in one shifting flock before the tide pushed them off.'],['16 Oct','Curlew probing the soft mud by the channel marker, eleven birds.'],['4 Oct','Seal hauled out on the sandbar for most of the afternoon.']]},
+ {title:'Hedgerow, Lane End', h:300, seed:23, n:26, dates:'1–31 Oct', by:'Priya Nand',
+  summary:'A 400-metre hedge surveyed in 20-metre sections. Berries, gaps, and who is eating what.',
+  entries:[['31 Oct','Section 14: blackthorn sloes almost stripped, redwings feeding at dusk.'],['20 Oct','Gap in section 6 now wide enough for a deer path, hoof prints both ways.'],['11 Oct','Dormouse-gnawed hazelnuts found at the base of section 9.']]}
+];
+
+/* Topographic thumbnails, deterministic from a seed so list and detail match exactly. */
+function rnd(seed){ let s = seed * 9301 + 49297; return () => (s = (s * 9301 + 49297) % 233280) / 233280; }
+function art(b){
+ const r = rnd(b.seed), cx = 40 + r() * 80, cy = 25 + r() * 50, k1 = 2 + Math.floor(r() * 3), k2 = 3 + Math.floor(r() * 3), p1 = r() * 6.28, p2 = r() * 6.28;
+ const cx2 = 160 - cx * .7, cy2 = 100 - cy * .6;
+ let out = '';
+ const ring = (x0, y0, rad, warp) => {
+  const pts = [];
+  for (let i = 0; i < 28; i++) { const a = i / 28 * Math.PI * 2, m = 1 + warp * (.2 * Math.sin(a * k1 + p1) + .12 * Math.sin(a * k2 + p2)); pts.push([x0 + Math.cos(a) * rad * m * 1.35, y0 + Math.sin(a) * rad * m]); }
+  let d = `M${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
+  for (let i = 0; i < pts.length; i++) {
+   const p0 = pts[(i - 1 + 28) % 28], q1 = pts[i], q2 = pts[(i + 1) % 28], q3 = pts[(i + 2) % 28];
+   d += `C${(q1[0] + (q2[0] - p0[0]) / 6).toFixed(1)} ${(q1[1] + (q2[1] - p0[1]) / 6).toFixed(1)} ${(q2[0] - (q3[0] - q1[0]) / 6).toFixed(1)} ${(q2[1] - (q3[1] - q1[1]) / 6).toFixed(1)} ${q2[0].toFixed(1)} ${q2[1].toFixed(1)}`;
+  }
+  return d + 'Z';
+ };
+ for (let i = 1; i <= 11; i++) out += `<path class="${i % 4 === 0 ? 'major' : ''}" d="${ring(cx, cy, i * 9, 1 + i * .08)}"/>`;
+ for (let i = 1; i <= 4; i++) out += `<path d="${ring(cx2, cy2, i * 7, 1.4)}"/>`;
+ out += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="2.2"/>`;
+ return `<svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${out}</svg>`;
+}
+
+const grid = $('#grid'), list = $('#list'), detail = $('#detail'), hero = $('#hero'), dtitle = $('#dtitle');
+grid.innerHTML = BOOKS.map((b, i) => `<li><button class="card" type="button" data-i="${i}" aria-label="${b.title}, ${b.n} entries"><div class="art" style="--h:${b.h}">${art(b)}</div><span class="t">${b.title}</span><span class="m">${b.n} entries · ${b.dates}</span></button></li>`).join('');
+const cards = [...grid.querySelectorAll('.card')];
+let current = -1, busy = false;
+
+function fill(i){
+ const b = BOOKS[i];
+ hero.style.setProperty('--h', b.h); hero.innerHTML = art(b);
+ dtitle.textContent = b.title;
+ $('#dmeta').textContent = `${b.n} entries · ${b.dates} 2026 · Kept by ${b.by}`;
+ $('#dbody').innerHTML = `<p class="summary">${b.summary}</p><h3>Latest entries</h3><ol class="entries">${b.entries.map(([d, t]) => `<li><time>${d}</time><span>${t}</span></li>`).join('')}</ol>`;
+ const body = $('#dbody'); body.classList.remove('reveal'); void body.offsetWidth; body.classList.add('reveal');
+}
+const parts = i => [cards[i].querySelector('.art'), cards[i].querySelector('.t')];
+const name = (els, on) => { els[0].style.viewTransitionName = on ? 'thumb' : ''; els[1].style.viewTransitionName = on ? 'title' : ''; };
+
+function flip(fromEls, toEls){
+ const ease = 'cubic-bezier(.16,1,.3,1)';
+ fromEls.forEach((f, k) => {
+  const a = f, b = toEls[k].getBoundingClientRect();
+  const sx = a.width / b.width, sy = k === 0 ? a.height / b.height : sx;
+  toEls[k].animate([{transformOrigin:'0 0', transform:`translate(${a.left - b.left}px,${a.top - b.top}px) scale(${sx},${sy})`}, {transformOrigin:'0 0', transform:'none'}], {duration:420, easing:ease});
+ });
+}
+async function swap(update, from, to){
+ if (rm.matches) { update(); return; }
+ if (canVT) {
+  name(from, true);
+  const vt = document.startViewTransition(() => { name(from, false); update(); name(to(), true); });
+  try { await vt.finished; } finally { name(to(), false); }
+ } else {
+  const rects = from.map(e => e.getBoundingClientRect());
+  update(); flip(rects, to());
+  await new Promise(r => setTimeout(r, 430));
+ }
+}
+async function open(i){
+ if (busy || current === i) return;
+ busy = true; current = i;
+ await swap(() => { fill(i); list.hidden = true; detail.hidden = false; scrollTo(0, 0); }, parts(i), () => [hero, dtitle]);
+ dtitle.focus({preventScroll:true});
+ busy = false;
+}
+async function close(){
+ if (busy || current < 0) return;
+ busy = true; const i = current; current = -1;
+ await swap(() => { detail.hidden = true; list.hidden = false; if (!canVT && !rm.matches) cards.forEach((c, k) => k !== i && c.animate([{opacity:0}, {opacity:1}], {duration:260, delay:80, easing:'ease-out', fill:'backwards'})); }, [hero, dtitle], () => parts(i));
+ cards[i].focus({preventScroll:true});
+ busy = false;
+}
+grid.addEventListener('click', e => { const c = e.target.closest('.card'); if (c) open(+c.dataset.i); });
+$('#back').addEventListener('click', close);
+addEventListener('keydown', e => { if (e.key === 'Escape' && current >= 0) { e.preventDefault(); close(); } });
+
+/* ---------- autoplay ---------- */
+const STOP = Symbol('stop');
+let auto = params.has('autoplay'), gen = 0, cur;
+const sleep = ms => new Promise((res, rej) => { const g = gen; setTimeout(() => g === gen && auto ? res() : rej(STOP), ms); });
+function stopAuto(e){ if (!e.isTrusted || !auto) return; auto = false; gen++; cur && cur.remove(); }
+['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(ev => addEventListener(ev, stopAuto, {capture:true, passive:true}));
+function put(x, y, ms){ cur.style.transitionDuration = (rm.matches ? 0 : ms) + 'ms'; cur.style.transform = `translate(${x}px,${y}px)`; cur._p = {x, y}; }
+async function moveTo(x, y){ const f = cur._p, d = Math.hypot(x - f.x, y - f.y), ms = rm.matches ? 0 : Math.min(750, 260 + d * .9); put(x, y, ms); await sleep(ms + 80); }
+async function tapEl(n, dy = .5){ const r = n.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height * dy; await moveTo(x, y); const rp = document.createElement('div'); rp.className = 'ap-ripple'; rp.style.left = x + 'px'; rp.style.top = y + 'px'; document.body.append(rp); setTimeout(() => rp.remove(), 500); await sleep(110); n.click(); }
+async function key(label, fn){ const k = document.createElement('kbd'); k.className = 'ap-key'; k.textContent = label; document.body.append(k); await sleep(350); fn(); await sleep(700); k.remove(); }
+async function demo(){
+ await sleep(700);
+ await tapEl(cards[1], .4); await sleep(2600);
+ await tapEl($('#back')); await sleep(1300);
+ await tapEl(cards[4], .4); await sleep(2400);
+ await moveTo(innerWidth * .5, innerHeight - 80);
+ await key('Esc', close); await sleep(1400);
+}
+async function run(){
+ cur = document.createElement('div'); cur.className = 'ap-cursor'; cur.setAttribute('aria-hidden', 'true');
+ cur.innerHTML = '<svg width="22" height="26" viewBox="0 0 22 26"><path d="M2 2l17 11.5-7.4 1.3L16 23l-3.6 1.6-4.3-8.3L2 21z" fill="var(--ink)" stroke="var(--bg)" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+ document.body.append(cur); put(innerWidth * .6, innerHeight * .9, 0);
+ while (auto) {
+  try { await demo(); await sleep(2000); document.activeElement && document.activeElement.blur(); }
+  catch (e) { if (e !== STOP) throw e; }
+ }
+}
+if (auto) run();
+})();
+</script>
+</body>
+</html>

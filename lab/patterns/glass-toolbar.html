@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Glass Toolbar</title>
+<link rel="stylesheet" href="../lab.css">
+<style>
+:root{
+  --glass-tint:color-mix(in srgb,var(--surface) 46%,transparent);
+  --glass-hi:rgba(255,255,255,.85);
+  --glass-lo:rgba(255,255,255,.18);
+  --glass-shadow:0 1px 1px rgba(23,22,26,.08),0 10px 28px rgba(23,22,26,.16);
+  --bar-h:56px;--bar-h-c:38px;--tab-h:62px;--tab-h-c:52px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --glass-tint:color-mix(in srgb,var(--surface) 52%,transparent);
+  --glass-hi:rgba(255,255,255,.42);--glass-lo:rgba(255,255,255,.06);
+  --glass-shadow:0 1px 1px rgba(0,0,0,.3),0 12px 30px rgba(0,0,0,.5)}}
+:root[data-theme="dark"]{
+  --glass-tint:color-mix(in srgb,var(--surface) 52%,transparent);
+  --glass-hi:rgba(255,255,255,.42);--glass-lo:rgba(255,255,255,.06);
+  --glass-shadow:0 1px 1px rgba(0,0,0,.3),0 12px 30px rgba(0,0,0,.5)}
+html,body{overflow:hidden}
+::selection{background:color-mix(in srgb,var(--accent) 30%,transparent)}
+
+/* Feed: the content the glass sits on */
+.feed{position:fixed;inset:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.feed:focus-visible{outline-offset:-4px}
+.feed-inner{max-width:900px;margin:0 auto;padding:84px 16px 120px}
+.feed-head{padding:8px 4px 20px}
+.feed-head h1{margin:0;font-size:clamp(28px,5vw,40px);line-height:1.1;letter-spacing:-.02em;text-wrap:balance}
+.feed-head p{margin:6px 0 0;color:var(--muted);font-size:15px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr));gap:16px}
+.card{margin:0;border-radius:var(--r-md);overflow:hidden;background:var(--raised);box-shadow:var(--shadow)}
+.card.wide{grid-column:1/-1}
+.card svg{display:block;width:100%;height:auto;aspect-ratio:4/3}
+.card.wide svg{aspect-ratio:16/7}
+.card figcaption{padding:12px 14px 14px}
+.card b{display:block;font-size:15px;font-weight:600}
+.card span{color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+
+/* The glass material */
+.glass{position:fixed;isolation:isolate;border-radius:999px;background:var(--glass-tint);box-shadow:var(--glass-shadow);
+  -webkit-backdrop-filter:blur(14px) saturate(1.7);backdrop-filter:blur(14px) saturate(1.7);
+  transition:width .42s var(--ease),height .42s var(--ease),scale .32s var(--spring)}
+html.lens .glass{--glass-tint:color-mix(in srgb,var(--surface) 30%,transparent)}
+:root[data-theme="dark"].lens .glass{--glass-tint:color-mix(in srgb,var(--surface) 40%,transparent)}
+/* Specular rim: a thin bright edge, strongest top-left and bottom-right, like light catching a lens */
+.glass::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;padding:1px;
+  background:linear-gradient(140deg,var(--glass-hi),var(--glass-lo) 32%,transparent 50%,var(--glass-lo) 70%,var(--glass-hi));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
+.glass.press,.squash.press{scale:1.06 .9;transition-duration:.42s,.42s,.12s;transition-timing-function:var(--ease),var(--ease),var(--ease)}
+
+button{border:0;background:none;cursor:pointer;padding:0;-webkit-tap-highlight-color:transparent}
+.ico{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+
+/* Top toolbar */
+.topbar{top:12px;left:50%;translate:-50% 0;height:var(--bar-h);width:var(--top-w,560px);z-index:3}
+.topbar .tb{position:absolute;top:50%;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;translate:0 -50%;
+  transition:opacity .2s var(--ease),scale .3s var(--ease),visibility 0s,background-color .15s}
+.topbar .tb:hover{background:color-mix(in srgb,var(--ink) 8%,transparent)}
+.tb.back{left:8px}.tb.share{right:52px}.tb.more{right:8px}
+.topbar .title{position:absolute;inset:0;margin:auto;width:max-content;height:40px;padding:0 14px;border-radius:999px;
+  font-size:16px;font-weight:600;letter-spacing:-.01em;transition:scale .42s var(--ease)}
+.topbar.condensed{height:var(--bar-h-c);width:var(--top-wc,130px)}
+.topbar.condensed .tb{opacity:0;scale:.4;visibility:hidden;pointer-events:none;transition:opacity .15s var(--exit),scale .2s var(--exit),visibility 0s .2s}
+.topbar.condensed .title{scale:.88}
+
+/* Tab bar + search */
+.tabbar{position:fixed;bottom:max(16px,env(safe-area-inset-bottom));left:50%;translate:-50% 0;width:var(--nav-w,560px);height:var(--tab-h);z-index:3;pointer-events:none}
+.tabbar > *{pointer-events:auto}
+.tabs{position:absolute;left:0;bottom:0;width:var(--tabs-w,480px);height:var(--tab-h);overflow:hidden;cursor:default}
+.tabs .row{position:absolute;left:0;top:0;bottom:0;width:var(--tabs-w0,480px);display:flex;transition:translate .42s var(--ease)}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:999px;color:var(--ink);transition:opacity .25s var(--ease)}
+.tab .ico{transition:translate .42s var(--ease)}
+.tab small{font-size:11px;font-weight:600;letter-spacing:.01em;transition:opacity .2s var(--ease)}
+.tab[aria-selected="true"]{color:var(--accent)}
+.tab:focus-visible{outline-offset:-4px}
+.indicator{position:absolute;top:5px;bottom:5px;left:5px;width:calc(var(--tab-w,120px) - 10px);border-radius:999px;
+  background:color-mix(in srgb,var(--ink) 9%,transparent);translate:var(--ind-x,0) 0;
+  transition:translate .45s var(--spring),opacity .2s,scale .3s var(--spring)}
+.search{right:0;bottom:0;position:absolute;width:var(--tab-h);height:var(--tab-h);display:grid;place-items:center;color:var(--ink)}
+.tabbar.condensed .tabs{width:var(--tab-h-c);height:var(--tab-h-c);cursor:pointer}
+.tabbar.condensed .search{width:var(--tab-h-c);height:var(--tab-h-c)}
+.tabbar.condensed .tab:not([aria-selected="true"]){opacity:0;pointer-events:none}
+.tabbar.condensed .tab small{opacity:0}
+.tabbar.condensed .tab .ico{translate:0 7px}
+.tabbar.condensed .indicator{opacity:0}
+.tabbar.condensed .row{translate:var(--row-x,0) 0}
+
+/* Synthetic touch for autoplay */
+.touch{position:fixed;left:0;top:0;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;z-index:10;pointer-events:none;
+  background:color-mix(in srgb,var(--ink) 22%,transparent);border:2px solid color-mix(in srgb,var(--surface) 85%,transparent);
+  box-shadow:0 2px 10px rgba(0,0,0,.18);opacity:0;transition:opacity .18s,scale .15s var(--ease)}
+.touch.on{opacity:1}.touch.down{scale:.82}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs id="filters"></defs></svg>
+
+<div class="feed" id="feed" tabindex="0" aria-label="Feed. Scroll to condense the toolbars.">
+  <div class="feed-inner">
+    <header class="feed-head"><h1 id="heading">North shore</h1><p id="sub">Field notes from the coast path · 18 walks this autumn</p></header>
+    <div class="grid" id="grid"></div>
+  </div>
+</div>
+
+<div class="topbar glass" id="topbar">
+  <button class="tb back squash" aria-label="Back"><svg class="ico" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+  <button class="title squash" id="title" aria-label="Today. Scroll to top">Today</button>
+  <button class="tb share squash" aria-label="Share"><svg class="ico" viewBox="0 0 24 24"><path d="M12 15V4M8 8l4-4 4 4M6 12v6a2 2 0 002 2h8a2 2 0 002-2v-6"/></svg></button>
+  <button class="tb more squash" aria-label="More options"><svg class="ico" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/><circle cx="18" cy="12" r="1.2" fill="currentColor"/></svg></button>
+</div>
+
+<nav class="tabbar" id="tabbar" aria-label="Sections">
+  <div class="tabs glass" id="tabs">
+    <div class="row" id="row" role="tablist">
+      <span class="indicator" id="indicator"></span>
+    </div>
+  </div>
+  <button class="search glass" id="search" aria-label="Search"><svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg></button>
+</nav>
+
+<div class="touch" id="touch" aria-hidden="true"></div>
+
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const feed = $('#feed'), grid = $('#grid'), topbar = $('#topbar'), tabbar = $('#tabbar'), tabsEl = $('#tabs'),
+      row = $('#row'), indicator = $('#indicator'), titleBtn = $('#title'), touch = $('#touch');
+const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+
+/* ---------- Content: generated landscapes ---------- */
+const PALETTES = [
+  ['#ff7a59','#ffd27a','#fff1c9','#2b7a78','#1d5560','#123a45'],
+  ['#5b8cff','#a8c8ff','#fff6d8','#3f9b6e','#2a7354','#16503b'],
+  ['#c04cfd','#ff8fb1','#ffe1a8','#6a3fa0','#4a2a7a','#2c1850'],
+  ['#ffb347','#ffe29a','#ffffff','#d1495b','#9c2f45','#5f1d33'],
+  ['#2ec4b6','#cbf3f0','#fffbe6','#ff9f1c','#e07a00','#8a4b00'],
+  ['#3a0ca3','#7209b7','#ffd166','#f72585','#b5179e','#560bad'],
+  ['#0081a7','#7bdff2','#fdfcdc','#f07167','#c44536','#6d2e46'],
+  ['#ff5d8f','#ffc2d4','#fff0f3','#3a86ff','#265fbf','#173a75'],
+];
+const TABS = [
+  {id:'today', label:'Today', head:'North shore', sub:'Field notes from the coast path · 18 walks this autumn',
+   icon:'<path d="M4 11l8-6 8 6v8a1 1 0 01-1 1h-4v-6h-6v6H5a1 1 0 01-1-1z"/>'},
+  {id:'places', label:'Places', head:'Places nearby', sub:'Bays, headlands and harbours within an hour',
+   icon:'<path d="M12 21s-6-5.6-6-11a6 6 0 1112 0c0 5.4-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/>'},
+  {id:'saved', label:'Saved', head:'Saved walks', sub:'Routes you marked for a clear day',
+   icon:'<path d="M7 4h10a1 1 0 011 1v15l-6-4-6 4V5a1 1 0 011-1z"/>'},
+  {id:'trips', label:'Trips', head:'Your trips', sub:'Three weekends planned before winter',
+   icon:'<rect x="4" y="7" width="16" height="12" rx="2"/><path d="M9 7V5h6v2"/>'},
+];
+const TITLES = ['Low tide at Marrow Point','Saltmarsh boardwalk','The red cliffs path','Harbour at first light','Dune grass, east end',
+  'Kelp beds off Fenwick','Lighthouse loop','Shingle bay at dusk','Tern colony walk','Estuary crossing','Rock pools, north arm',
+  'Old ferry slip','Sea stacks at Corran','Hollow Sands','Pilot\'s steps','Cormorant ledge','The long groyne','Ebb channel'];
+
+function rng(seed){return()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function hill(r, base, amp){
+  let d = `M0 ${base}`, x = 0, y = base;
+  while (x < 400){ const nx = x + 80 + r()*60, ny = base + (r()-.5)*amp; d += ` Q${x+(nx-x)/2} ${y+(r()-.5)*amp*1.4} ${nx} ${ny}`; x = nx; y = ny; }
+  return d + ' L400 300 L0 300Z';
+}
+function art(seed, uid){
+  const r = rng(seed), p = PALETTES[seed % PALETTES.length];
+  const sx = 60 + r()*280, sy = 60 + r()*70, sr = 26 + r()*30;
+  return `<svg viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <defs><linearGradient id="s${uid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${p[0]}"/><stop offset="1" stop-color="${p[1]}"/></linearGradient></defs>
+    <rect width="400" height="300" fill="url(#s${uid})"/>
+    <circle cx="${sx}" cy="${sy}" r="${sr}" fill="${p[2]}"/>
+    <path d="${hill(r,170,60)}" fill="${p[3]}"/><path d="${hill(r,215,50)}" fill="${p[4]}"/><path d="${hill(r,255,36)}" fill="${p[5]}"/></svg>`;
+}
+function renderFeed(tabIndex){
+  const t = TABS[tabIndex];
+  $('#heading').textContent = t.head; $('#sub').textContent = t.sub;
+  let html = '';
+  for (let i = 0; i < 14; i++){
+    const seed = tabIndex*31 + i*7 + 3, km = (1.2 + ((seed*13)%40)/10).toFixed(1);
+    html += `<figure class="card${i % 5 === 0 ? ' wide' : ''}">${art(seed, tabIndex+'-'+i)}<figcaption><b>${TITLES[(i+tabIndex*5)%TITLES.length]}</b><span>${km} km · ${Math.round(km*16)} min</span></figcaption></figure>`;
+  }
+  grid.innerHTML = html;
+}
+
+/* ---------- Tabs ---------- */
+let active = 0;
+TABS.forEach((t, i) => {
+  const b = document.createElement('button');
+  b.className = 'tab'; b.setAttribute('role','tab'); b.id = 'tab-'+t.id;
+  b.innerHTML = `<svg class="ico" viewBox="0 0 24 24">${t.icon}</svg><small>${t.label}</small>`;
+  b.addEventListener('click', e => { if (tabbar.classList.contains('condensed')) { setCondensed(false); e.stopPropagation(); return; } selectTab(i); });
+  row.appendChild(b);
+});
+const tabButtons = [...row.querySelectorAll('.tab')];
+function selectTab(i){
+  active = i;
+  tabButtons.forEach((b, j) => { b.setAttribute('aria-selected', j === i); b.tabIndex = j === i ? 0 : -1; });
+  titleBtn.textContent = TABS[i].label; titleBtn.setAttribute('aria-label', TABS[i].label + '. Scroll to top');
+  renderFeed(i); feed.scrollTop = 0; setCondensed(false); layout();
+}
+row.addEventListener('keydown', e => {
+  const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+  if (!d) return; e.preventDefault();
+  const n = (active + d + TABS.length) % TABS.length; selectTab(n); tabButtons[n].focus();
+});
+tabsEl.addEventListener('click', () => { if (tabbar.classList.contains('condensed')) setCondensed(false); });
+
+/* ---------- Geometry ---------- */
+function layout(){
+  const vw = document.documentElement.clientWidth, w = Math.min(560, vw - 32);
+  const tabH = 62, tabsW = w - tabH - 10, tabW = tabsW / TABS.length, cH = 52;
+  const s = document.documentElement.style;
+  s.setProperty('--top-w', w + 'px');
+  s.setProperty('--nav-w', w + 'px');
+  s.setProperty('--tabs-w', tabsW + 'px'); s.setProperty('--tabs-w0', tabsW + 'px'); s.setProperty('--tab-w', tabW + 'px');
+  s.setProperty('--ind-x', (active * tabW) + 'px');
+  s.setProperty('--row-x', (-active * tabW + (cH - tabW) / 2) + 'px');
+  // Condensed title pill hugs its text
+  const probe = document.createElement('span'); probe.style.cssText = 'position:absolute;visibility:hidden;font:600 16px/1 Inter,system-ui,sans-serif;letter-spacing:-.01em';
+  probe.textContent = titleBtn.textContent; document.body.appendChild(probe);
+  s.setProperty('--top-wc', Math.ceil(probe.getBoundingClientRect().width * .88 + 36) + 'px'); probe.remove();
+}
+addEventListener('resize', layout);
+
+/* ---------- Condense on scroll down, expand on scroll up ---------- */
+let condensed = false, lastY = 0, travel = 0;
+function setCondensed(on){
+  if (on === condensed) return; condensed = on;
+  topbar.classList.toggle('condensed', on); tabbar.classList.toggle('condensed', on);
+  titleBtn.setAttribute('aria-expanded', String(!on));
+}
+feed.addEventListener('scroll', () => {
+  const y = feed.scrollTop, dy = y - lastY; lastY = y;
+  if (Math.sign(dy) !== Math.sign(travel)) travel = 0;
+  travel += dy;
+  if (y < 40) setCondensed(false);
+  else if (travel > 24) setCondensed(true);
+  else if (travel < -24) setCondensed(false);
+}, {passive:true});
+titleBtn.addEventListener('click', () => {
+  if (condensed) setCondensed(false);
+  else smoothScroll(0, 450);
+});
+
+/* ---------- Press squash (pointer and keyboard) ---------- */
+function pressTarget(el){ return el.closest('.tab') ? (tabbar.classList.contains('condensed') ? tabsEl : indicatorFor(el)) : el.closest('.squash, .glass'); }
+function indicatorFor(tab){ return tab.getAttribute('aria-selected') === 'true' ? indicator : tab; }
+let pressed = null;
+function press(el){ release(); if (!el) return; pressed = el; el.classList.add('press'); }
+function release(){ if (pressed){ pressed.classList.remove('press'); pressed = null; } }
+document.addEventListener('pointerdown', e => { const b = e.target.closest('button, .tabs'); if (b && !b.closest('#feed')) press(pressTarget(e.target)); });
+['pointerup','pointercancel','pointerleave','blur'].forEach(t => addEventListener(t, release));
+document.addEventListener('keydown', e => { if ((e.key === ' ' || e.key === 'Enter') && e.target.closest('button')) press(pressTarget(e.target)); });
+document.addEventListener('keyup', release);
+indicator.classList.add('squash'); tabButtons.forEach(b => b.classList.add('squash'));
+
+/* ---------- Refraction: SVG displacement inside backdrop-filter (Chromium), blur elsewhere ---------- */
+const ua = navigator.userAgent;
+const lensOK = /Chrom(e|ium)\//.test(ua) && !/Firefox|CriOS|EdgiOS/.test(ua) && CSS.supports('backdrop-filter','url(#x)');
+if (lensOK) document.documentElement.classList.add('lens');
+const defs = $('#filters');
+function mapURL(w, h){
+  const k = .5, cw = Math.max(2, Math.round(w*k)), ch = Math.max(2, Math.round(h*k));
+  const c = document.createElement('canvas'); c.width = cw; c.height = ch;
+  const ctx = c.getContext('2d'), img = ctx.createImageData(cw, ch), d = img.data;
+  const r = Math.min(w, h) / 2, hw = w / 2, hh = h / 2, bez = Math.min(18, r * .85);
+  for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++){
+    const px = (x + .5) / k - hw, py = (y + .5) / k - hh, qx = Math.abs(px) - (hw - r), qy = Math.abs(py) - (hh - r);
+    let sd, nx, ny;
+    if (qx > 0 && qy > 0){ const L = Math.hypot(qx, qy); sd = L - r; nx = qx / L; ny = qy / L; }
+    else if (qx > qy){ sd = qx - r; nx = 1; ny = 0; } else { sd = qy - r; nx = 0; ny = 1; }
+    nx *= px < 0 ? -1 : 1; ny *= py < 0 ? -1 : 1;
+    const depth = -sd, t = depth < bez ? 1 - Math.max(0, depth) / bez : 0, m = t * t;
+    const i = (y * cw + x) * 4;
+    d[i] = 128 - 127 * nx * m; d[i+1] = 128 - 127 * ny * m; d[i+2] = 128; d[i+3] = 255;
+  }
+  ctx.putImageData(img, 0, 0); return c.toDataURL();
+}
+const glassEls = [topbar, tabsEl, $('#search')];
+glassEls.forEach((el, n) => {
+  if (!lensOK) return;
+  const id = 'lens' + n;
+  defs.insertAdjacentHTML('beforeend', `<filter id="${id}" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+    <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="b"/>
+    <feImage result="map" x="0" y="0" preserveAspectRatio="none"/>
+    <feDisplacementMap in="b" in2="map" scale="34" xChannelSelector="R" yChannelSelector="G" result="d"/>
+    <feColorMatrix in="d" type="saturate" values="1.5"/></filter>`);
+  const f = document.getElementById(id), im = f.querySelector('feImage');
+  let queued = false, lastKey = '';
+  const update = () => {
+    queued = false;
+    const w = el.offsetWidth, h = el.offsetHeight, key = w + 'x' + h;
+    if (!w || !h || key === lastKey) return; lastKey = key;
+    im.setAttribute('width', w); im.setAttribute('height', h); im.setAttribute('href', mapURL(w, h));
+    el.style.backdropFilter = el.style.webkitBackdropFilter = `url(#${id})`;
+  };
+  new ResizeObserver(() => { if (!queued){ queued = true; requestAnimationFrame(update); } }).observe(el);
+});
+
+/* ---------- Smooth scroll helper (used by title tap and autoplay) ---------- */
+let scrollAnim = 0;
+function smoothScroll(to, dur, ease = t => 1 - Math.pow(1 - t, 3)){
+  cancelAnimationFrame(scrollAnim);
+  const from = feed.scrollTop, max = feed.scrollHeight - feed.clientHeight; to = Math.max(0, Math.min(max, to));
+  if (reduced.matches || dur <= 0){ feed.scrollTop = to; return Promise.resolve(); }
+  return new Promise(res => {
+    const t0 = performance.now();
+    const step = now => { const t = Math.min(1, (now - t0) / dur); feed.scrollTop = from + (to - from) * ease(t); t < 1 ? scrollAnim = requestAnimationFrame(step) : res(); };
+    scrollAnim = requestAnimationFrame(step);
+  });
+}
+
+/* ---------- Autoplay ---------- */
+let auto = new URLSearchParams(location.search).has('autoplay'), token = 0;
+const wait = ms => new Promise((res, rej) => { const t = token; setTimeout(() => t === token && auto ? res() : rej('stopped'), reduced.matches ? Math.min(ms, 900) : ms); });
+function stopAuto(){ if (!auto) return; auto = false; token++; cancelAnimationFrame(scrollAnim); touch.className = 'touch'; release(); }
+['pointerdown','keydown','wheel','touchstart'].forEach(t => addEventListener(t, e => { if (e.isTrusted) stopAuto(); }, {capture:true, passive:true}));
+const center = el => { const r = el.getBoundingClientRect(); return [r.left + r.width/2, r.top + r.height/2]; };
+async function moveTouch(x, y, ms = 380){
+  touch.style.transition = `opacity .18s, scale .15s, translate ${reduced.matches ? 0 : ms}ms cubic-bezier(.16,1,.3,1)`;
+  touch.style.translate = `${x}px ${y}px`; touch.classList.add('on'); await wait(ms);
+}
+async function tap(el, after){
+  const [x, y] = center(el); await moveTouch(x, y);
+  touch.classList.add('down'); press(pressTarget(el)); await wait(150);
+  touch.classList.remove('down'); release(); el.click(); if (after) await wait(after);
+}
+async function swipe(dist){
+  // A finger drag followed by momentum, the way a thumb scrolls a feed
+  const vh = innerHeight, x = innerWidth * .62, y0 = dist > 0 ? vh * .72 : vh * .32, drag = Math.sign(dist) * Math.min(vh * .3, 220);
+  touch.style.transition = 'opacity .18s, scale .15s'; touch.style.translate = `${x}px ${y0}px`;
+  touch.classList.add('on','down'); await wait(120);
+  touch.style.transition = `opacity .18s, scale .15s, translate 300ms linear`; touch.style.translate = `${x}px ${y0 - drag}px`;
+  await smoothScroll(feed.scrollTop + drag, 300, t => t);
+  touch.classList.remove('down','on');
+  await smoothScroll(feed.scrollTop + dist - drag, 900);
+}
+async function script(){
+  await wait(900);
+  await swipe(420); await wait(500);
+  await swipe(520); await wait(900);
+  await swipe(380); await wait(700);
+  await swipe(-260); await wait(1000);
+  await swipe(480); await wait(800);
+  await tap(tabsEl, 900);
+  await tap(tabButtons[2], 1100);
+  await swipe(460); await wait(800);
+  await swipe(-600); await wait(600);
+  await tap(tabButtons[0], 400);
+}
+async function run(){
+  while (auto){
+    try { await script(); touch.classList.remove('on'); await wait(2000); } catch { return; }
+  }
+}
+
+selectTab(0);
+if (auto) run();
+})();
+</script>
+</body>
+</html>
